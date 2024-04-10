@@ -1,0 +1,11 @@
+version: "3.0"
+
+services:
+  api:
+    container_name: "api"
+    volumes:
+      - ./app:/app
+    build: .
+    ports:
+      - 8080:8080
+    command: bash -c "cd ./src && uvicorn main:app --reload --host 0.0.0.0 --port 8080"

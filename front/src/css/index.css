@@ -1,0 +1,169 @@
+a {
+  text-decoration: none;
+}
+
+ul, li {
+  list-style: none;
+}
+
+body {
+
+}
+/* ヘッダー */
+header {
+  background-color: #333;
+  width: 100%;
+  height: 75px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 999;
+}
+
+.header__inner {
+  padding: 0 3%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: inherit;
+  position: relative;
+}
+
+.header__title {
+  width: 150px;
+	font-family: "Kiwi Maru", serif;
+	font-weight: 400;
+  font-style: normal;
+}
+.header__title a {
+	color: #fff;
+}
+
+.header__title img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.header__nav {
+  position: absolute;
+  right: 0;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100vh;
+  transform: translateX(100%); 
+  background-color: #fff;
+  transition: ease .4s;
+}
+
+.header__hamburger {
+  width: 48px;
+  height: 100%;
+}
+
+.hamburger {
+  background-color: transparent;
+  border-color: transparent;
+  z-index: 9999;
+  cursor: pointer;
+}
+
+.hamburger span {
+  width: 100%;
+  height: 1px;
+  background-color: #fff;
+  position: relative;
+  transition: ease .4s;
+  display: block;
+}
+
+.hamburger span:nth-child(1) {
+  top: 0;
+}
+
+.hamburger span:nth-child(2) {
+  margin: 8px 0;
+}
+
+
+.hamburger span:nth-child(3) {
+  top: 0;
+}
+
+.header__nav.active {
+  transform: translateX(15%);
+}
+
+.hamburger.active span {
+	background-color: #000;
+}
+
+.hamburger.active span:nth-child(1) {
+  top: 5px;
+  transform: rotate(45deg);
+}
+
+.hamburger.active span:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger.active span:nth-child(3) {
+  top: -13px;
+  transform: rotate(-45deg);
+}
+
+.nav-items {
+  padding-top: 250px;
+  padding-bottom: 200px;
+}
+
+.nav-items__item a {
+  color: black;
+  width: 100%;
+  display: block;
+  text-align: center;
+  font-size: 24px;
+  margin-bottom: 24px;
+}
+
+.nav-items__item:last-child a {
+  margin-bottom: 0;
+}
+
+/* メイン */
+main {
+	margin-top: 75px;
+  background-color: #f1f1f1;
+  margin-left: auto; margin-right: auto;
+  max-width: 500px;
+}
+
+
+/* フッター */
+footer {
+  bottom: 0;
+  left: 0;
+  width: 100%;
+	position: fixed;
+  background-color: #333;
+  height: 50px;
+}
+
+footer span {
+	text-align: center;
+	color: #fff;
+	position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+
+@media screen and (min-width: 481px) {
+	/* 481px以上に適用されるCSS（タブレット用） */
+}
+
+@media screen and (min-width: 960px) {
+	/* 960px以上に適用されるCSS（PC用） */
+}
