@@ -5,6 +5,7 @@ import pandas as pd
 import shutil
 import datetime
 import gtfs_realtime
+import math
 
 URL = "https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip"
 DATA_DIR = "./data/gtfs-static"
@@ -34,6 +35,7 @@ def generate_gtfs_data():
     trips = pd.read_csv(DATA_DIR + "/trips.txt")
     calendar = pd.read_csv(DATA_DIR + "/calendar.txt")
     routes = pd.read_csv(DATA_DIR + "/routes.txt")
+    routes_jp = pd.read_csv(DATA_DIR + "/routes_jp.txt")
     stops = pd.read_csv(DATA_DIR + "/stops.txt")
     stops["stop_id"] = stops["stop_id"].apply(lambda id: id.replace(" ", "_"))
 
@@ -42,6 +44,7 @@ def generate_gtfs_data():
     df2 = pd.merge(df, calendar, on="service_id")
     df3 = pd.merge(df2, routes, on="route_id")
     df4 = pd.merge(df3, stops, on="stop_id")
+    df5 = pd.merge(df4, routes_jp, on="route_id")
 
     ichipiro_route_list = df4[df4["stop_id"].apply(lambda id: id in IDS)][
         "route_id"
@@ -49,14 +52,16 @@ def generate_gtfs_data():
 
     ichipiro_routes = set(ichipiro_route_list)
 
-    df5 = df4[df4["route_id"].apply(lambda id: id in ichipiro_routes)]
+    df6 = df5[df5["route_id"].apply(lambda id: id in ichipiro_routes)]
 
     # 保存
-    df_result = df5[
+    df_result = df6[
         [
             "trip_id",
             "stop_id",
+            "route_short_name",
             "route_id",
+            "destination_stop",
             "arrival_time",
             "stop_sequence",
             "monday",
@@ -136,17 +141,25 @@ def next_bus_times(now_stop_id, dest_stop_id, response_size=5, opt=False):
             realtime = gtfs_realtime.bus_realtime_data(
                 row["trip_id"], row["stop_sequence"]
             )
+        
+            
+            delay = realtime["delay"]
+            if (delay == 0):
+                delay = ""
+            else:
+                delay = str( (delay // 60) ) + "分遅れ"
+            
+            
 
             dic = {
-                "trip_id": row["trip_id"],
-                "route_id": row["route_id"],
-                "now_stop_id": row["stop_id"],
-                "arrival_time": row["arrival_time"],
-                "dest_stop_id": res["stop_id"],
-                "dest_arrival_time": res["arrival_time"],
-                "delay": realtime["delay"],
-                "time_at_now_stop": realtime["time"],
+                "trip_short_id": row["route_short_name"],
+                "trip_dest": row["destination_stop"],
+                "arrival_time": row["arrival_time"].strftime("%H:%M"),
+                "current_locate": "",
+                "delay": delay,
             }
+            
+            
 
             response.append(dic)
 
@@ -157,7 +170,8 @@ def next_bus_times(now_stop_id, dest_stop_id, response_size=5, opt=False):
 
 
 def main():
-    # generate_gtfs_data()
+    #dl_gtfs_static_files()
+    #generate_gtfs_data()
     print(next_bus_times("24140_1", "51240", opt=True))
     print("success")
 
