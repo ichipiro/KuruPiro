@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 
 import '../css/top.css'
 import { json } from "react-router-dom";
+import { startWorker } from '../mocks/node'
 
 
 
@@ -15,10 +16,13 @@ function NextBusesList() {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (import.meta.env.VITE_USE_MSW === 'true') {
+        await startWorker();
+      }
       try {
-        const piroResponse = await fetch('http://localhost:8080/api/22030_2/51240?opt=true');
+        const piroResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/22030_2/51240?opt=true');
         setPiroData((await piroResponse.json()));
-        const numaResponse = await fetch('http://localhost:8080/api/24140_1/51240?opt=true');
+        const numaResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/24140_1/51240?opt=true');
         setNumaData((await numaResponse.json()));
       } catch (error) {
         console.error('データの取得中にエラーが発生しました:', error);
