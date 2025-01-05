@@ -6,12 +6,13 @@ import React, { useState, useEffect } from 'react';
 import '../css/top.css'
 import { json } from "react-router-dom";
 import { startWorker } from '../mocks/node'
+import { BusService } from "../types/api.ts";
 
 
 
 function NextBusesList() {
-  const [piroData, setPiroData] = useState<any>(null); // データ
-  const [numaData, setNumaData] = useState<any>(null); // データ
+  const [piroData, setPiroData] = useState<BusService[]>([]);
+  const [numaData, setNumaData] = useState<BusService[]>([]);
   const [loading, setLoading] = useState<boolean>(true); // ローディング状態
 
   useEffect(() => {
@@ -42,24 +43,23 @@ function NextBusesList() {
         <div className="NextBusesLists">
           <div className="NextBusesList piro">
             <p className="StopName">市立大学前</p>
-            {console.log(piroData[0])}
-            {piroData.map((element: any, index: number) => (
+            {piroData.map((element: BusService, index: number) => (
               <div key={index} className="NextBusesListCell">
-                <p className="BusName">63-2<br />広島バスセンター</p>
-                <p className="StaticTime">{element.arrival_time.substring(11, 16)}</p>
-                <p className="RemainingMinutes">出発待ち</p>
-                <p className="DelayMinutes"></p>
+                <p className="BusName">{element.trip_id}<br />{element.trip_dest}</p>
+                <p className="StaticTime">{element.arrival_time}</p>
+                <p className="RemainingMinutes">{element.current_locate}</p>
+                <p className="DelayMinutes">{element.deray === "" ? ("") : (element.deray)}</p>
               </div>
             ))}
           </div>
           <div className="NextBusesList numa">
             <p className="StopName">沼田料金所前</p>
-            {numaData.map((element: any, index: number) => (
+            {numaData.map((element: BusService, index: number) => (
               <div key={index} className="NextBusesListCell">
-                <p className="BusName">63-2<br />広島バスセンター</p>
-                <p className="StaticTime">{element.arrival_time.substring(11, 16)}</p>
-                <p className="RemainingMinutes">出発待ち</p>
-                <p className="DelayMinutes"></p>
+                <p className="BusName">{element.trip_id}<br />{element.trip_dest}</p>
+                <p className="StaticTime">{element.arrival_time}</p>
+                <p className="RemainingMinutes">{element.current_locate}</p>
+                <p className="DelayMinutes">{element.deray === "" ? ("") : (element.deray)}</p>
               </div>
             ))}
           </div>
