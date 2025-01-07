@@ -18,9 +18,15 @@ function NextBusesList() {
         await startWorker();
       }
       try {
-        const piroResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/22030_2/51240?opt=true');
+        const piroResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/22030_2/51240?opt=true', {
+          method: "GET",
+          credentials: "include",
+        });
         setPiroData((await piroResponse.json()));
-        const numaResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/24140_1/51240?opt=true');
+        const numaResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/24140_1/51240?opt=true', {
+          method: "GET",
+          credentials: "include",
+        });
         setNumaData((await numaResponse.json()));
       } catch (error) {
         console.error('データの取得中にエラーが発生しました:', error);
@@ -42,10 +48,10 @@ function NextBusesList() {
             <p className="StopName">市立大学前</p>
             {piroData.map((element: BusService, index: number) => (
               <div key={index} className="NextBusesListCell">
-                <p className="BusName">{element.trip_id}<br />{element.trip_dest}</p>
+                <p className="BusName">{element.trip_short_id}<br />{element.trip_dest}</p>
                 <p className="StaticTime">{element.arrival_time}</p>
                 <p className="RemainingMinutes">{element.current_locate}</p>
-                <p className="DelayMinutes">{element.delay === "" ? ("") : (element.delay)}</p>
+                <p className="DelayMinutes">{element.delay === "-1分遅れ" ? ("") : (element.delay)}</p>
               </div>
             ))}
           </div>
@@ -53,10 +59,10 @@ function NextBusesList() {
             <p className="StopName">沼田料金所前</p>
             {numaData.map((element: BusService, index: number) => (
               <div key={index} className="NextBusesListCell">
-                <p className="BusName">{element.trip_id}<br />{element.trip_dest}</p>
+                <p className="BusName">{element.trip_short_id}<br />{element.trip_dest}</p>
                 <p className="StaticTime">{element.arrival_time}</p>
                 <p className="RemainingMinutes">{element.current_locate}</p>
-                <p className="DelayMinutes">{element.delay === "" ? ("") : (element.delay)}</p>
+                <p className="DelayMinutes">{element.delay === "-1分遅れ" ? ("") : (element.delay)}</p>
               </div>
             ))}
           </div>
