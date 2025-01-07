@@ -9,7 +9,7 @@ app = FastAPI()
 # CORSを回避するために追加（今回の肝）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "https://kurupiro.huyu2239.work"],
     allow_credentials=True,   # 追記により追加
     allow_methods=["*"],      # 追記により追加
     allow_headers=["*"]       # 追記により追加
