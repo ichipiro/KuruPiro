@@ -5,7 +5,6 @@ import pandas as pd
 import shutil
 import datetime
 import gtfs_realtime
-import math
 
 from gtfs import STATIC_DATA_URL, STATIC_DATA_DIR, IDS, WEEKDAY_DICT
 
@@ -13,7 +12,6 @@ from gtfs import STATIC_DATA_URL, STATIC_DATA_DIR, IDS, WEEKDAY_DICT
 # GTFS staticファイルのダウンロード
 def dl_gtfs_static_files():
     shutil.rmtree(STATIC_DATA_DIR)  # 前のファイルが残って居た場合に消去する
-
     with (
         requests.get(STATIC_DATA_URL) as res,
         io.BytesIO(res.content) as bytes_io,
@@ -25,7 +23,6 @@ def dl_gtfs_static_files():
 # GTFS staticのデータを整形して一つのファイルにする関数
 # gtfs-static.csv
 def generate_gtfs_data():
-
     # 必要なtxtファイルをGTFS staticから読み込み
     stop_times = pd.read_csv(STATIC_DATA_DIR + "/stop_times.txt")
     stop_times["stop_id"] = stop_times["stop_id"].apply(lambda id: id.replace(" ", "_"))
@@ -71,26 +68,21 @@ def generate_gtfs_data():
         ]
     ]
     df_result.to_csv(STATIC_DATA_DIR + "/gtfs-static.csv")
-
     return
 
 
 def find_stop_from_trip_id(
     trip_id, dest_stop_id, now_stop_sequence, df_gtfs, opt=False
 ):
-
     df_trip = df_gtfs[df_gtfs["trip_id"] == trip_id]
-
     if opt:
         df_trip.loc[:, "stop_id"] = df_trip["stop_id"].apply(
             lambda id: id.split("_")[0]
         )
-
     df = df_trip[
         (df_trip["stop_sequence"] > now_stop_sequence)
         & (df_trip["stop_id"] == dest_stop_id)
     ]
-
     return df
 
 
@@ -99,59 +91,38 @@ def next_bus_times(now_stop_id, dest_stop_id, response_size=5, opt=False):
     now_time = datetime.datetime.now() + datetime.timedelta(hours=9)
     now_weekday = WEEKDAY_DICT[now_time.weekday()]
     now_date = now_time.strftime("%Y-%m-%d")
-
     df_gtfs = pd.read_csv(STATIC_DATA_DIR + "/gtfs-static.csv")
-
-    # 曜日とstop_idでフィルター
     df_active_bus = df_gtfs[(df_gtfs[now_weekday] == 1)]
-
-    # 時間でフィルター
     df_active_bus.loc[:, "arrival_time"] = df_active_bus["arrival_time"].apply(
         lambda x: datetime.datetime.strptime((now_date + " " + x), "%Y-%m-%d %H:%M:%S")
     )
-
     df_stop = df_active_bus[df_active_bus["stop_id"] == now_stop_id]
-
     df_stop_filter_from_time = df_stop[df_stop["arrival_time"] > now_time].sort_values(
         "arrival_time"
     )
-
-    for index, row in df_stop_filter_from_time.iterrows():
+    for _, row in df_stop_filter_from_time.iterrows():
         res = find_stop_from_trip_id(
             row["trip_id"], dest_stop_id, row["stop_sequence"], df_active_bus, opt
         )
-        if not res.empty:
-
-            res = res.iloc[0]
-
-            realtime = gtfs_realtime.bus_realtime_data(
-                row["trip_id"], row["stop_sequence"]
-            )
-        
-            
-            delay = realtime["delay"]
-            if (delay == 0):
-                delay = ""
-            else:
-                delay = str( (delay // 60) ) + "分遅れ"
-            
-            
-
-            dic = {
-                "trip_id": row["route_short_name"],
-                "trip_dest": row["destination_stop"],
-                "arrival_time": row["arrival_time"].strftime("%H:%M"),
-                "current_locate": "",
-                "delay": delay,
-            }
-            
-            
-
-            response.append(dic)
-
-            if len(response) >= response_size:
-                return response
-
+        if res.empty:
+            continue
+        res = res.iloc[0]
+        realtime = gtfs_realtime.bus_realtime_data(
+            row["trip_id"], row["stop_sequence"]
+        )
+        delay = ""
+        if realtime["delay"] not in [-1, 0]:
+            delay = str( (delay // 60) + 1 ) + "分遅れ"
+        dic = {
+            "trip_id": row["route_short_name"],
+            "trip_dest": row["destination_stop"],
+            "arrival_time": row["arrival_time"].strftime("%H:%M"),
+            "current_locate": "",
+            "delay": delay,
+        }
+        response.append(dic)
+        if len(response) >= response_size:
+            break
     return response
 
 
