@@ -152,7 +152,7 @@ def next_bus_times(now_stop_id, dest_stop_id, response_size=5, opt=False):
             
 
             dic = {
-                "trip_short_id": row["route_short_name"],
+                "trip_id": row["route_short_name"],
                 "trip_dest": row["destination_stop"],
                 "arrival_time": row["arrival_time"].strftime("%H:%M"),
                 "current_locate": "",

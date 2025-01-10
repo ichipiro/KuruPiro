@@ -48,7 +48,7 @@ function NextBusesList() {
             <p className="StopName">市立大学前</p>
             {piroData.map((element: BusService, index: number) => (
               <div key={index} className="NextBusesListCell">
-                <p className="BusName">{element.trip_short_id}<br />{element.trip_dest}</p>
+                <p className="BusName">{element.trip_id}<br />{element.trip_dest}</p>
                 <p className="StaticTime">{element.arrival_time}</p>
                 <p className="RemainingMinutes">{element.current_locate}</p>
                 <p className="DelayMinutes">{element.delay === "-1分遅れ" ? ("") : (element.delay)}</p>
@@ -59,7 +59,7 @@ function NextBusesList() {
             <p className="StopName">沼田料金所前</p>
             {numaData.map((element: BusService, index: number) => (
               <div key={index} className="NextBusesListCell">
-                <p className="BusName">{element.trip_short_id}<br />{element.trip_dest}</p>
+                <p className="BusName">{element.trip_id}<br />{element.trip_dest}</p>
                 <p className="StaticTime">{element.arrival_time}</p>
                 <p className="RemainingMinutes">{element.current_locate}</p>
                 <p className="DelayMinutes">{element.delay === "-1分遅れ" ? ("") : (element.delay)}</p>
