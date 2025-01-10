@@ -7,22 +7,19 @@ import datetime
 import gtfs_realtime
 import math
 
-URL = "https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip"
-DATA_DIR = "./data/gtfs-static"
-
-IDS = ("22030_2", "22030_1", "22030_52", "24140_1", "24140_2")
+from gtfs import STATIC_DATA_URL, STATIC_DATA_DIR, IDS, WEEKDAY_DICT
 
 
 # GTFS staticファイルのダウンロード
 def dl_gtfs_static_files():
-    shutil.rmtree(DATA_DIR)  # 前のファイルが残って居た場合に消去する
+    shutil.rmtree(STATIC_DATA_DIR)  # 前のファイルが残って居た場合に消去する
 
     with (
-        requests.get(URL) as res,
+        requests.get(STATIC_DATA_URL) as res,
         io.BytesIO(res.content) as bytes_io,
         zipfile.ZipFile(bytes_io) as zip,
     ):
-        zip.extractall(DATA_DIR)
+        zip.extractall(STATIC_DATA_DIR)
 
 
 # GTFS staticのデータを整形して一つのファイルにする関数
@@ -30,13 +27,13 @@ def dl_gtfs_static_files():
 def generate_gtfs_data():
 
     # 必要なtxtファイルをGTFS staticから読み込み
-    stop_times = pd.read_csv(DATA_DIR + "/stop_times.txt")
+    stop_times = pd.read_csv(STATIC_DATA_DIR + "/stop_times.txt")
     stop_times["stop_id"] = stop_times["stop_id"].apply(lambda id: id.replace(" ", "_"))
-    trips = pd.read_csv(DATA_DIR + "/trips.txt")
-    calendar = pd.read_csv(DATA_DIR + "/calendar.txt")
-    routes = pd.read_csv(DATA_DIR + "/routes.txt")
-    routes_jp = pd.read_csv(DATA_DIR + "/routes_jp.txt")
-    stops = pd.read_csv(DATA_DIR + "/stops.txt")
+    trips = pd.read_csv(STATIC_DATA_DIR + "/trips.txt")
+    calendar = pd.read_csv(STATIC_DATA_DIR + "/calendar.txt")
+    routes = pd.read_csv(STATIC_DATA_DIR + "/routes.txt")
+    routes_jp = pd.read_csv(STATIC_DATA_DIR + "/routes_jp.txt")
+    stops = pd.read_csv(STATIC_DATA_DIR + "/stops.txt")
     stops["stop_id"] = stops["stop_id"].apply(lambda id: id.replace(" ", "_"))
 
     # データ整形
@@ -73,20 +70,9 @@ def generate_gtfs_data():
             "sunday",
         ]
     ]
-    df_result.to_csv(DATA_DIR + "/gtfs-static.csv")
+    df_result.to_csv(STATIC_DATA_DIR + "/gtfs-static.csv")
 
     return
-
-
-weekday_dic = {
-    0: "monday",
-    1: "tuesday",
-    2: "wednesday",
-    3: "thursday",
-    4: "friday",
-    5: "saturday",
-    6: "sunday",
-}
 
 
 def find_stop_from_trip_id(
@@ -111,10 +97,10 @@ def find_stop_from_trip_id(
 def next_bus_times(now_stop_id, dest_stop_id, response_size=5, opt=False):
     response = []
     now_time = datetime.datetime.now() + datetime.timedelta(hours=9)
-    now_weekday = weekday_dic[now_time.weekday()]
+    now_weekday = WEEKDAY_DICT[now_time.weekday()]
     now_date = now_time.strftime("%Y-%m-%d")
 
-    df_gtfs = pd.read_csv(DATA_DIR + "/gtfs-static.csv")
+    df_gtfs = pd.read_csv(STATIC_DATA_DIR + "/gtfs-static.csv")
 
     # 曜日とstop_idでフィルター
     df_active_bus = df_gtfs[(df_gtfs[now_weekday] == 1)]

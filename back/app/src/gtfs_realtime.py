@@ -5,11 +5,11 @@ import datetime
 import os
 import urllib.request, urllib.error
 
-DATA_DIR = "./data/gtfs-realtime"
+from gtfs import REALTIME_DATA_DIR, REALTIME_DATA_URL
 
 
 def get_gtfs_realtime_data():
-    old_gtfs_file = os.listdir(DATA_DIR)[0]
+    old_gtfs_file = os.listdir(REALTIME_DATA_DIR)[0]
 
     old_gtfs_file_date = datetime.datetime.strptime(
         old_gtfs_file, "%Y%m%d_%H%M%S_gtfsrealtime.bin"
@@ -19,13 +19,12 @@ def get_gtfs_realtime_data():
     passed_time = (now_time - old_gtfs_file_date).total_seconds()
 
     if passed_time >= 15.0:
-        os.remove(DATA_DIR + "/" + old_gtfs_file)
-        url = "https://ajt-mobusta-gtfs.mcapps.jp/realtime/8/trip_updates.bin"
-        response = requests.get(url)
+        os.remove(REALTIME_DATA_DIR + "/" + old_gtfs_file)
+        response = requests.get(REALTIME_DATA_URL)
 
         now_time = datetime.datetime.now() + datetime.timedelta(hours=9)
         fileName = now_time.strftime("%Y%m%d_%H%M%S_") + "gtfsrealtime.bin"
-        saveFilePath = DATA_DIR + "/" + fileName
+        saveFilePath = REALTIME_DATA_DIR + "/" + fileName
 
         with open(saveFilePath, "wb") as saveFile:
             saveFile.write(response.content)
@@ -33,7 +32,7 @@ def get_gtfs_realtime_data():
         return response.content
 
     else:
-        with open(DATA_DIR + "/" + old_gtfs_file, "rb") as readFile:
+        with open(REALTIME_DATA_DIR + "/" + old_gtfs_file, "rb") as readFile:
             return readFile.read()
 
 
