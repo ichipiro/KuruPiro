@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware # 追加
 import gtfs_static
 import json
+import datetime
 
 
 app = FastAPI()
@@ -14,6 +15,7 @@ app.add_middleware(
     allow_methods=["*"],      # 追記により追加
     allow_headers=["*"]       # 追記により追加
 )
+cache = {}
 
 
 @app.get("/")
@@ -25,4 +27,12 @@ def hello_world():
 def next_bus(
     stop_id: str, dest_stop_id: str, response_size: int = 5, opt: bool = False
 ):
-    return gtfs_static.next_bus_times(stop_id, dest_stop_id, response_size, opt)
+    now = datetime.datetime.now()
+    if stop_id not in cache:
+        cache[stop_id] = {}
+    if dest_stop_id not in cache[stop_id] or (now - cache[stop_id][dest_stop_id]["timestamp"]).seconds > 15:
+        cache[stop_id][dest_stop_id] = {
+            "data": gtfs_static.next_bus_times(stop_id, dest_stop_id, response_size, opt),
+            "timestamp": datetime.datetime.now(),
+        }
+    return cache[stop_id][dest_stop_id]["data"]

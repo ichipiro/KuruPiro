@@ -6,7 +6,7 @@ import shutil
 import datetime
 import gtfs_realtime
 
-from gtfs import STATIC_DATA_URL, STATIC_DATA_DIR, IDS, WEEKDAY_DICT
+from gtfs import STATIC_DATA_URL, STATIC_DATA_DIR, IDS, WEEKDAY_DICT, REALTIME_DATA_URL
 
 
 # GTFS staticファイルのダウンロード
@@ -100,6 +100,7 @@ def next_bus_times(now_stop_id, dest_stop_id, response_size=5, opt=False):
     df_stop_filter_from_time = df_stop[df_stop["arrival_time"] > now_time].sort_values(
         "arrival_time"
     )
+    raw_retaltime_data = requests.get(REALTIME_DATA_URL).content
     for _, row in df_stop_filter_from_time.iterrows():
         res = find_stop_from_trip_id(
             row["trip_id"], dest_stop_id, row["stop_sequence"], df_active_bus, opt
@@ -108,7 +109,7 @@ def next_bus_times(now_stop_id, dest_stop_id, response_size=5, opt=False):
             continue
         res = res.iloc[0]
         realtime = gtfs_realtime.bus_realtime_data(
-            row["trip_id"], row["stop_sequence"]
+            raw_retaltime_data, row["trip_id"], row["stop_sequence"]
         )
         delay = ""
         if realtime["delay"] not in [-1, 0]:

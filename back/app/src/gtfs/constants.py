@@ -1,5 +1,4 @@
 STATIC_DATA_DIR = "./data/gtfs-static"
-REALTIME_DATA_DIR = "./data/gtfs-realtime"
 STATIC_DATA_URL = "https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip"
 REALTIME_DATA_URL = "https://ajt-mobusta-gtfs.mcapps.jp/realtime/8/trip_updates.bin"
 
