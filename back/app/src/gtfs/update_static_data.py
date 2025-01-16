@@ -3,12 +3,16 @@ import zipfile
 import io
 import pandas as pd
 import shutil
+import os
 
 from .constants import STATIC_DATA_DIR, STATIC_DATA_URL, IDS
 
 
 # GTFS staticファイルのダウンロード
 def dl_gtfs_static_files():
+    # ディレクトリがなければ作成
+    if not os.path.exists(STATIC_DATA_DIR):
+        os.makedirs(STATIC_DATA_DIR)
     shutil.rmtree(STATIC_DATA_DIR)  # 前のファイルが残って居た場合に消去する
     with (
         requests.get(STATIC_DATA_URL) as res,

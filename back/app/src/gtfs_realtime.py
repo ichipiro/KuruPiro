@@ -1,9 +1,6 @@
 from google.transit import gtfs_realtime_pb2
-import requests
 import datetime
-import os
 
-from gtfs import REALTIME_DATA_URL
 
 
 def bus_realtime_data(realtime_data, trip_id, stop_sequence):
@@ -18,10 +15,10 @@ def bus_realtime_data(realtime_data, trip_id, stop_sequence):
         for stop_time in entity.trip_update.stop_time_update:
             if stop_time.stop_sequence != stop_sequence:
                 continue
-            if hasattr(stop_time, "arrival"):
-                timeObj = stop_time.arrival
-            elif hasattr(stop_time, "departure"):
+            if hasattr(stop_time, "departure"):
                 timeObj = stop_time.departure
+            elif hasattr(stop_time, "arrival"):
+                timeObj = stop_time.arrival
             else:
                 continue
 
