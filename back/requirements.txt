@@ -1,6 +1,10 @@
 fastapi
 uvicorn
+sqlalchemy
+psycopg2-binary
+pydantic-settings
 requests
+pydantic
+alembic
 gtfs-realtime-bindings
-pandas
-datetime
+jpholiday
