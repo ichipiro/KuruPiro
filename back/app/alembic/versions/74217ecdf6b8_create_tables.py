@@ -1,8 +1,8 @@
 """create tables
 
-Revision ID: 436159fd541e
+Revision ID: 74217ecdf6b8
 Revises: 
-Create Date: 2025-02-06 21:48:00.046019
+Create Date: 2025-02-18 07:17:45.302544
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '436159fd541e'
+revision: str = '74217ecdf6b8'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -35,11 +35,10 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_calendar_service_id'), 'calendar', ['service_id'], unique=False)
     op.create_table('calendar_dates',
-    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('service_id', sa.String(), nullable=False),
     sa.Column('date', sa.String(), nullable=False),
     sa.Column('exception_type', sa.Integer(), nullable=False),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('service_id', 'date')
     )
     op.create_table('routes',
     sa.Column('route_id', sa.String(), nullable=False),
@@ -49,6 +48,16 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('route_id')
     )
     op.create_index(op.f('ix_routes_route_id'), 'routes', ['route_id'], unique=False)
+    op.create_table('routes_jp',
+    sa.Column('route_id', sa.String(), nullable=False),
+    sa.Column('route_update_date', sa.String(), nullable=True),
+    sa.Column('origin_stop', sa.String(), nullable=False),
+    sa.Column('via_stop', sa.String(), nullable=True),
+    sa.Column('destination_stop', sa.String(), nullable=False),
+    sa.Column('jp_parent_route_id', sa.String(), nullable=False),
+    sa.PrimaryKeyConstraint('route_id')
+    )
+    op.create_index(op.f('ix_routes_jp_route_id'), 'routes_jp', ['route_id'], unique=False)
     op.create_table('stop_times',
     sa.Column('trip_id', sa.String(), nullable=False),
     sa.Column('arrival_time', sa.Time(), nullable=False),
@@ -84,6 +93,8 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_stops_stop_id'), table_name='stops')
     op.drop_table('stops')
     op.drop_table('stop_times')
+    op.drop_index(op.f('ix_routes_jp_route_id'), table_name='routes_jp')
+    op.drop_table('routes_jp')
     op.drop_index(op.f('ix_routes_route_id'), table_name='routes')
     op.drop_table('routes')
     op.drop_table('calendar_dates')

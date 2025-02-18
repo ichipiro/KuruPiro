@@ -5,6 +5,7 @@ psycopg2-binary
 pydantic-settings
 requests
 pydantic
+pandas
 alembic
 gtfs-realtime-bindings
 jpholiday

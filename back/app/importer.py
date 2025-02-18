@@ -3,6 +3,7 @@ import csv
 import shutil
 import requests
 import zipfile
+import pandas as pd
 
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
@@ -29,25 +30,6 @@ CSV_MODEL_MAPPING = {
 
 
 def import_csv_for_model(session: Session, model, filepath: str) -> None:
-
-    def process_csv_row(row: dict, model) -> dict:
-        # モデルの各カラム名と型情報を取得
-        col_info = {col.name: col.type for col in model.__table__.columns}
-
-        # モデル側に converters が定義されていれば取得（なければ空辞書）
-        converters = getattr(model, "converters", {})
-
-        # 各フィールドについて、converters にあれば変換、なければそのまま
-        data = {
-            field: (
-                converters[field](row.get(field, ""))
-                if field in converters
-                else row.get(field, "")
-            )
-            for field in col_info.keys()
-        }
-        return data
-
     if not os.path.exists(filepath):
         print(f"ファイル {filepath} が見つかりません。 スキップします。")
         return
@@ -55,12 +37,39 @@ def import_csv_for_model(session: Session, model, filepath: str) -> None:
     print(
         f"{os.path.basename(filepath)} のデータをテーブル名 '{model.__tablename__}' にインポートしています..."
     )
-    with open(filepath, newline="", encoding="utf-8-sig") as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            data = process_csv_row(row, model)
-            session.merge(model(**data))
-        session.commit()
+
+    df = pd.read_csv(filepath, encoding="utf-8-sig")
+
+    # モデルに定義されているカラムのみを抽出
+    allowed_columns = [col.name for col in model.__table__.columns]
+    df = df.loc[:, df.columns.intersection(allowed_columns)]
+
+    # モデル側にconvertersが定義されていれば適用
+    converters = getattr(model, "converters", {})
+    for column, func in converters.items():
+        if column in df.columns:
+            df[column] = df[column].apply(func)
+
+    data_list = df.to_dict(orient="records")
+
+    stmt = insert(model).values(data_list)
+    # 主キーのカラム名リスト
+    pk_columns = [col.name for col in model.__table__.primary_key.columns]
+
+    # 主キー以外の全カラムを更新対象とする
+    update_dict = {
+        col.name: getattr(stmt.excluded, col.name)
+        for col in model.__table__.columns
+        if not col.primary_key
+    }
+
+    stmt = stmt.on_conflict_do_update(
+        index_elements=pk_columns,  # 主キーで衝突判定
+        set_=update_dict,  # 主キー以外のカラムを更新
+    )
+
+    session.execute(stmt)
+    session.commit()
 
 
 def download_and_extract_gtfs(destination_dir: str) -> None:
