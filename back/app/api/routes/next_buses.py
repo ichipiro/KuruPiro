@@ -126,9 +126,8 @@ def get_next_buses(
         )
 
     results = query.all()
-
     if not results:
-        raise HTTPException(status_code=404, detail="バス無し")
+        return {"next_buses": []}
 
     response = []
     for stop_time, origin_stop_time, route in results:
