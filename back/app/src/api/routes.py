@@ -5,6 +5,8 @@ APIルートを定義するモジュール
 from fastapi import APIRouter
 from typing import List, Dict, Any
 
+from pytz import timezone
+
 
 from services.gtfs.realtime import GTFSRealtimeData
 from services.bus.service import BusService
@@ -23,22 +25,13 @@ def next_bus(
     return [
         {
             "trip_id": bus.trip_id,
-            "route_name": bus.route_name,
+            "trip_short_id": bus.route_name,
             "arrival_time": bus.arrival_time,
-            "delay": bus.delay,
+            "delay": str(bus.delay) + "分遅れ" if bus.delay > 0 else "",
             "status": bus.status,
         }
         for bus in buses
     ]
-
-
-@router.get("/trip/{trip_id}")
-def get_trip_realtime(trip_id: str) -> GTFSRealtimeData:
-
-    data = bus_service.realtime_manager.get_data_by_trip_id(trip_id=trip_id)
-    # print(bus_service.realtime_manager.get_data())
-
-    return data
 
 
 @router.get("/api/stop/{stop_id}/name")

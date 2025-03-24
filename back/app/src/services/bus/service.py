@@ -4,6 +4,9 @@
 
 import datetime
 from typing import List, Dict, Any, Optional
+from zoneinfo import ZoneInfo
+
+from pytz import timezone
 
 from services.gtfs.static import GTFSStaticManager
 from services.gtfs.realtime import GTFSRealtimeManager
@@ -52,7 +55,7 @@ class BusService:
         destination_pattern = self._normalize_stop_id(destination_stop_id)
 
         # 現在時刻を取得
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(ZoneInfo("Asia/Tokyo"))
         current_seconds = self._convert_time_to_seconds(now.strftime("%H:%M:%S"))
 
         # 静的データから便を取得
