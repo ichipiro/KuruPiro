@@ -88,6 +88,8 @@ class GTFSStaticManager:
     def generate_gtfs_data(self) -> None:
         """GTFS静的データの生成"""
         stop_times = pd.read_csv(f"{DATA_DIR}/stop_times.txt")
+        stop_times["stop_id"] = stop_times["stop_id"].str.replace(" ", "_")
+        print(stop_times)
         trips = pd.read_csv(f"{DATA_DIR}/trips.txt")
         calendar = pd.read_csv(f"{DATA_DIR}/calendar.txt")
         routes = pd.read_csv(f"{DATA_DIR}/routes.txt")
@@ -97,10 +99,7 @@ class GTFSStaticManager:
         merged_data = pd.merge(stop_times, trips, on="trip_id")
         merged_data = pd.merge(merged_data, calendar, on="service_id")
         merged_data = pd.merge(merged_data, routes, on="route_id")
-
-        if "route_id" in routes_jp.columns and "route_name" in routes_jp.columns:
-            route_names = routes_jp.set_index("route_id")["route_name"].to_dict()
-            merged_data["route_name_jp"] = merged_data["route_id"].map(route_names)
+        merged_data = pd.merge(merged_data, routes_jp, on="route_id")
 
         merged_data.to_csv(self.gtfs_static_path, index=False)
 

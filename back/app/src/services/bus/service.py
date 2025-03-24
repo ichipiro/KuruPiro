@@ -5,7 +5,7 @@
 import datetime
 from typing import List, Dict, Any, Optional
 from zoneinfo import ZoneInfo
-
+import math
 from pytz import timezone
 
 from services.gtfs.static import GTFSStaticManager
@@ -90,11 +90,16 @@ class BusService:
                     actual_departure_seconds
                 )
 
+                remainning = math.floor(
+                    (actual_departure_seconds - current_seconds) / 60
+                )
+
                 next_bus = BusNextArrival(
                     trip_id=trip["trip_id"],
-                    route_name=trip.get("route_name_jp", trip["route_short_name_x"]),
+                    route_name=trip["route_short_name_x"],
                     arrival_time=actual_departure_time,
                     status=status,
+                    remaining=remainning,
                     trip_dest=trip["destination_stop_x"],
                     delay=delay_seconds,
                 )

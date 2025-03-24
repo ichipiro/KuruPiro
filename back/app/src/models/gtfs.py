@@ -42,6 +42,7 @@ class BusNextArrival:
     arrival_time: str
     status: str
     trip_dest: str
+    remaining: int
     delay: Optional[int] = None
 
 
