@@ -28,6 +28,7 @@ def next_bus(
             "trip_short_id": bus.route_name,
             "arrival_time": bus.arrival_time,
             "delay": str(bus.delay) + "分遅れ" if bus.delay > 0 else "",
+            "trip_dest": bus.trip_dest,
             "status": bus.status,
         }
         for bus in buses

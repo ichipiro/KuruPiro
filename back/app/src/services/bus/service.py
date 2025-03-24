@@ -95,6 +95,7 @@ class BusService:
                     route_name=trip.get("route_name_jp", trip["route_short_name_x"]),
                     arrival_time=actual_departure_time,
                     status=status,
+                    trip_dest=trip["destination_stop_x"],
                     delay=delay_seconds,
                 )
                 results.append(next_bus)
