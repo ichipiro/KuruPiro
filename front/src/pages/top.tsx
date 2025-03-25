@@ -55,7 +55,7 @@ function NextBusesList() {
                 <p className="BusName">{element.trip_short_id}<br />{element.trip_dest}</p>
                 <p className="StaticTime">{element.arrival_time}</p>
                 <p className="RemainingMinutes">{element.remaining_time}</p>
-                <p className="DelayMinutes">{element.delay === "-1分遅れ" ? ("") : (element.delay)}</p>
+                <p className="DelayMinutes">{element.delay}</p>
               </div>
             ))}
           </div>
@@ -66,7 +66,7 @@ function NextBusesList() {
                 <p className="BusName">{element.trip_short_id}<br />{element.trip_dest}</p>
                 <p className="StaticTime">{element.arrival_time}</p>
                 <p className="RemainingMinutes">{element.remaining_time}</p>
-                <p className="DelayMinutes">{element.delay === "-1分遅れ" ? ("") : (element.delay)}</p>
+                <p className="DelayMinutes">{element.delay}</p>
               </div>
             ))}
           </div>
