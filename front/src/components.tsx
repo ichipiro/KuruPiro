@@ -35,7 +35,7 @@ export function Header(): JSX.Element {
 export function Footer(): JSX.Element {
 	return (
 		<footer>
-			<span>&copy; 2024 いちぴろ・エクスプローラー.</span>
+			<span>&copy; 2025 いちぴろ・エクスプローラ.</span>
 		</footer>
 	)
 }
