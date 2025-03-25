@@ -76,13 +76,13 @@ function NextBusesList() {
   )
 }
 
-function TimeTable() {
-  return (
-    <div className="TimeTableSection">
-      時刻表
-    </div>
-  )
-}
+// function TimeTable() {
+//   return (
+//     <div className="TimeTableSection">
+//       時刻表
+//     </div>
+//   )
+// }
 
 export function TopPage(): JSX.Element {
 
