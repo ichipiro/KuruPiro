@@ -2,15 +2,10 @@
 APIルートを定義するモジュール
 """
 
-import datetime
-from zoneinfo import ZoneInfo
 from fastapi import APIRouter
 from typing import List, Dict, Any
 
-from pytz import timezone
 
-
-from services.gtfs.realtime import GTFSRealtimeData
 from services.bus.service import BusService
 
 router = APIRouter()

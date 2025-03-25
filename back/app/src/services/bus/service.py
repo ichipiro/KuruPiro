@@ -101,7 +101,7 @@ class BusService:
                     status=status,
                     remaining=remainning,
                     trip_dest=trip["destination_stop_x"],
-                    delay=delay_seconds,
+                    delay=math.ceil(delay_seconds / 60),
                 )
                 results.append(next_bus)
 
