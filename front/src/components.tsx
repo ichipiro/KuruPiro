@@ -1,10 +1,10 @@
-function toggleMenu(): void {
-	const ham = document.querySelector('#js-hamburger');
-	const nav = document.querySelector('#js-nav');
-	if (ham === null || nav === null) return;
-  ham.classList.toggle('active');
-  nav.classList.toggle('active');
-}
+// function toggleMenu(): void {
+// 	const ham = document.querySelector('#js-hamburger');
+// 	const nav = document.querySelector('#js-nav');
+// 	if (ham === null || nav === null) return;
+//   ham.classList.toggle('active');
+//   nav.classList.toggle('active');
+// }
 
 export function Header(): JSX.Element {
 	return (
@@ -13,7 +13,7 @@ export function Header(): JSX.Element {
 				<h1 className="header__title header-title">
 					<a href="#">くるぴろ</a>
 				</h1>
-				<nav className="header__nav nav" id="js-nav">
+				{/* <nav className="header__nav nav" id="js-nav">
 					<ul className="nav__items nav-items">
 						<li className="nav-items__item"><a href="">メニュー</a></li>
 						<li className="nav-items__item"><a href="">メニュー</a></li>
@@ -25,7 +25,7 @@ export function Header(): JSX.Element {
 					<span></span>
 					<span></span>
 					<span></span>
-				</button>
+				</button> */}
 			</div>
 		</header>
 	)
