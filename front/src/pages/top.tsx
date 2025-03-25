@@ -18,16 +18,20 @@ function NextBusesList() {
         await startWorker();
       }
       try {
-        const piroResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/22030_2/51240?opt=true', {
+        const piroResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/22030_2/51240_', {
           method: "GET",
           credentials: "include",
         });
-        setPiroData((await piroResponse.json()));
-        const numaResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/24140_1/51240?opt=true', {
+        const piroData = await piroResponse.json();
+        setPiroData(piroData);
+        console.log(piroData)
+        const numaResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/24140_1/51240_', {
           method: "GET",
           credentials: "include",
         });
-        setNumaData((await numaResponse.json()));
+        const numaData = await numaResponse.json();
+        setNumaData(numaData);
+        console.log(numaData)
       } catch (error) {
         console.error('データの取得中にエラーが発生しました:', error);
       } finally {
