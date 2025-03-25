@@ -9,6 +9,7 @@ p {
 .NextBusesListSection {
 	padding: 1% 3%;
 	text-align: center;
+	height: 800px;
 }
 
 .NextBusesLists {
@@ -66,8 +67,8 @@ p {
 }
 
 .DelayMinutes {
-	margin-top: 60px;
-	margin-left: 80px;
+	margin-top: 40px;
+	margin-left: 50px;
 	color: red;
 }
 

@@ -91,7 +91,7 @@ export function TopPage(): JSX.Element {
       <Header />
       <main>
         <NextBusesList />
-        <TimeTable />
+        {/* <TimeTable /> */}
       </main>
       <Footer />
     </>
