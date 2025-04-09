@@ -2,21 +2,31 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import {RouterProvider, createBrowserRouter} from "react-router-dom";
 
-import {TopPage} from "./pages/top.tsx";
+import Layout from "./layout";
+
+import TopPage from "./pages/top.tsx";
+import Disclaimer from "./pages/Disclaimer.tsx";
 
 import './css/index.css'
-
-
-function Error404() {
-  return <h2>404 Not found</h2>;
-}
-
 
 const router = createBrowserRouter([
   {
     path: "/",
-    element: <TopPage />,
-    errorElement: <Error404 />,
+    element: <Layout />,
+    children: [
+      {
+        index: true,
+        element: <TopPage />,
+      },
+      {
+        path: "disclaimer",
+        element: <Disclaimer />,
+      },
+      {
+        path: "*",
+        element: <h2>404 Not found</h2>,
+      },
+    ],
   },
 ]);
 

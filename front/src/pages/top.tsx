@@ -1,4 +1,3 @@
-import { Header, Footer } from "../components.tsx"
 import { useState, useEffect } from 'react';
 
 import '../css/top.css'
@@ -84,16 +83,14 @@ function NextBusesList() {
 //   )
 // }
 
-export function TopPage(): JSX.Element {
+function TopPage(): JSX.Element {
 
   return (
     <>
-      <Header />
-      <main>
-        <NextBusesList />
-        {/* <TimeTable /> */}
-      </main>
-      <Footer />
+      <NextBusesList />
+      {/* <TimeTable /> */}
     </>
   )
 }
+
+export default TopPage;
