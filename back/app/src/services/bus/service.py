@@ -85,11 +85,6 @@ class BusService:
 
             # 現在時刻より後の便のみを対象とする
             if actual_departure_seconds >= current_seconds:
-                # 遅延を考慮した出発時刻を時刻文字列に戻す
-                actual_departure_time = self._convert_seconds_to_time(
-                    actual_departure_seconds
-                )
-
                 remainning = math.floor(
                     (actual_departure_seconds - current_seconds) / 60
                 )
@@ -97,7 +92,7 @@ class BusService:
                 next_bus = BusNextArrival(
                     trip_id=trip["trip_id"],
                     route_name=trip["route_short_name_x"],
-                    arrival_time=actual_departure_time,
+                    arrival_time=self._convert_seconds_to_time(departure_seconds),
                     status=status,
                     remaining=remainning,
                     trip_dest=trip["destination_stop_x"],
