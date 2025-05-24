@@ -1,0 +1,28 @@
+services:
+  api:
+    build:
+      context: ./back
+      dockerfile: Dockerfile
+    container_name: api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - kurupiro_net
+
+  web:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+    container_name: web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "1950:80"
+    networks:
+      - kurupiro_net
+
+networks:
+  kurupiro_net:
+    driver: bridge 

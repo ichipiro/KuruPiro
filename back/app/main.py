@@ -14,7 +14,7 @@ app = FastAPI()
 # CORS設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://kurupiro.huyu2239.work"],
+    allow_origins=["http://localhost:1950", "https://kurupiro.huyu2239.work"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
