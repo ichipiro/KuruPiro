@@ -26,5 +26,4 @@ dist-ssr
 back/venv
 
 __pycache__
-data
 .env
