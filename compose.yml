@@ -18,10 +18,28 @@ services:
       dockerfile: Dockerfile
     container_name: web
     restart: unless-stopped
+    # todo: ルートにある.envの環境変数を使う
+    # env_file:
+    #   - .env
     depends_on:
       - api
     ports:
-      - "1950:80"
+      - "1950:1950"
+    networks:
+      - kurupiro_net
+
+  reverse-proxy:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: reverse-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    env_file:
+      - .env
+    depends_on:
+      - web
     networks:
       - kurupiro_net
 
