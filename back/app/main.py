@@ -9,12 +9,19 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from api.routes import router
 
+
 app = FastAPI()
+
+
+allowed_origins_csv = os.getenv("ALLOWED_ORIGINS_CSV", "")
+allowed_origins = [origin.strip() for origin in allowed_origins_csv.split(',') if origin.strip()]
+if not allowed_origins:
+    allowed_origins = ["http://localhost:5173"]
 
 # CORS設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://kurupiro.huyu2239.work"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
