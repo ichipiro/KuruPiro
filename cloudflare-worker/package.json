@@ -10,14 +10,15 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
+    "@types/pbf": "^3.0.5",
     "fflate": "^0.8.1",
-    "protobufjs": "^7.2.5"
+    "pbf": "^4.0.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240405.0",
     "@tsconfig/recommended": "^1.0.3",
     "prettier": "^3.2.5",
     "typescript": "^5.4.2",
-    "wrangler": "^3.41.0"
+    "wrangler": "^4.42.1"
   }
 }

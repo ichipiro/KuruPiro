@@ -1,5 +1,4 @@
-import { Root } from 'protobufjs/light';
-import descriptor from './gtfsRealtimeDescriptor';
+import Pbf from 'pbf';
 import { Env, RealtimeDelayResult } from './types';
 
 interface TripUpdateEntity {
@@ -19,40 +18,72 @@ interface CachedRealtimeData {
   tripUpdates: TripUpdateEntity[];
 }
 
-const root = Root.fromJSON(descriptor);
-const FeedMessage = root.lookupType('transit_realtime.FeedMessage');
-
 let realtimeCache: CachedRealtimeData | null = null;
 
+function readStopTimeUpdate(tag: number, obj: any, pbf: Pbf) {
+  if (tag === 1) obj.stopSequence = pbf.readVarint();
+  else if (tag === 4) obj.stopId = pbf.readString();
+  else if (tag === 2) {
+    // arrival
+    pbf.readMessage((tag2, obj2) => {
+      if (tag2 === 1) obj.arrivalDelay = pbf.readSVarint();
+      else if (tag2 === 2) obj.arrivalTime = pbf.readVarint();
+      else pbf.skip(tag2 & 0x7);
+    }, obj);
+  } else if (tag === 3) {
+    // departure
+    pbf.readMessage((tag2, obj2) => {
+      if (tag2 === 1) obj.departureDelay = pbf.readSVarint();
+      else if (tag2 === 2) obj.departureTime = pbf.readVarint();
+      else pbf.skip(tag2 & 0x7);
+    }, obj);
+  } else {
+    pbf.skip(tag & 0x7);
+  }
+}
+
+function readTripDescriptor(tag: number, obj: any, pbf: Pbf) {
+  if (tag === 1) obj.tripId = pbf.readString();
+  else pbf.skip(tag & 0x7);
+}
+
+function readTripUpdate(tag: number, obj: any, pbf: Pbf) {
+  if (tag === 1) {
+    obj.trip = pbf.readMessage(readTripDescriptor, {});
+  } else if (tag === 2) {
+    if (!obj.stopTimeUpdates) obj.stopTimeUpdates = [];
+    obj.stopTimeUpdates.push(pbf.readMessage(readStopTimeUpdate, {}));
+  } else {
+    pbf.skip(tag & 0x7);
+  }
+}
+
+function readFeedEntity(tag: number, obj: any, pbf: Pbf) {
+  if (tag === 1) obj.id = pbf.readString();
+  else if (tag === 3) obj.tripUpdate = pbf.readMessage(readTripUpdate, {});
+  else pbf.skip(tag & 0x7);
+}
+
+function readFeedMessage(tag: number, obj: any, pbf: Pbf) {
+  if (tag === 2) {
+    if (!obj.entities) obj.entities = [];
+    obj.entities.push(pbf.readMessage(readFeedEntity, {}));
+  } else {
+    pbf.skip(tag & 0x7);
+  }
+}
+
 function decodeTripUpdates(buffer: ArrayBuffer): TripUpdateEntity[] {
-  const message = FeedMessage.decode(new Uint8Array(buffer));
-  const object = FeedMessage.toObject(message, {
-    defaults: false,
-    arrays: true,
-    longs: Number,
-    enums: String,
-  }) as any;
-  const entities = Array.isArray(object.entity) ? object.entity : [];
+  const pbf = new Pbf(new Uint8Array(buffer));
+  const message: any = pbf.readMessage(readFeedMessage, {});
 
   const tripUpdates: TripUpdateEntity[] = [];
-  for (const entity of entities) {
-    if (!entity.trip_update || !entity.trip_update.trip) continue;
-    const tripId: string | undefined = entity.trip_update.trip.trip_id;
-    if (!tripId) continue;
-    const updatesRaw = Array.isArray(entity.trip_update.stop_time_update)
-      ? entity.trip_update.stop_time_update
-      : [];
-    const updates = updatesRaw.map((update: any) => ({
-      stopSequence: update.stop_sequence as number | undefined,
-      stopId: update.stop_id as string | undefined,
-      arrivalDelay: update.arrival?.delay as number | undefined,
-      arrivalTime: update.arrival?.time as number | undefined,
-      departureDelay: update.departure?.delay as number | undefined,
-      departureTime: update.departure?.time as number | undefined,
-    }));
+  for (const entity of message.entities || []) {
+    if (!entity.tripUpdate?.trip?.tripId) continue;
+
     tripUpdates.push({
-      tripId,
-      stopTimeUpdates: updates,
+      tripId: entity.tripUpdate.trip.tripId,
+      stopTimeUpdates: entity.tripUpdate.stopTimeUpdates || [],
     });
   }
   return tripUpdates;

@@ -1,6 +1,7 @@
 name = "kuru-piro-worker"
 main = "src/index.ts"
 compatibility_date = "2024-04-15"
+account_id = "19fc1347cce15e26c18cd792616f737c"
 
 [vars]
 GTFS_STATIC_URL = "https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip"
@@ -9,8 +10,8 @@ REALTIME_UPDATE_INTERVAL = "15"
 
 [[kv_namespaces]]
 binding = "GTFS_CACHE"
-id = ""
-preview_id = ""
+id = "49a3e4dd915c4ba08ba21c20cdf0793c"
+preview_id = "2d375ea9773e409a9196248637516aea"
 
 [triggers]
 crons = ["0 3 * * *"]

@@ -1,0 +1,35 @@
+name: Update GTFS Cache
+
+on:
+  # Run daily at 3:00 AM JST (18:00 UTC previous day)
+  schedule:
+    - cron: '0 18 * * *'
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  update-cache:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          cd cloudflare-worker
+          npm ci
+
+      - name: Build and upload GTFS data to KV
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+          GTFS_STATIC_URL: 'https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip'
+        run: |
+          cd cloudflare-worker
+          node scripts/build-and-upload.mjs

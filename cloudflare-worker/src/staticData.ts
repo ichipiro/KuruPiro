@@ -233,35 +233,43 @@ async function downloadAndBuild(env: Env): Promise<StaticData> {
     throw new Error(`Failed to download GTFS static data: ${response.status}`);
   }
   const arrayBuffer = await response.arrayBuffer();
+
+  // Clear array buffer reference after use to help GC
   const files = unzipSync(new Uint8Array(arrayBuffer));
+
+  // Build data and immediately clear files reference
   const data = buildStaticData(files);
+
   return data;
 }
 
 export async function getStaticData(env: Env, forceRefresh = false): Promise<StaticData> {
+  // Always try to use cached data first (memory or KV)
   if (!forceRefresh && inMemoryCache && !shouldRefresh(inMemoryCache)) {
     return inMemoryCache;
   }
 
-  let data: StaticData | null = null;
-  if (!forceRefresh) {
-    data = await loadFromKv(env);
-    if (data && !shouldRefresh(data)) {
-      inMemoryCache = data;
-      return data;
-    }
+  // Load from KV (data is pre-processed by GitHub Actions)
+  const data = await loadFromKv(env);
+  if (data) {
+    inMemoryCache = data;
+    return data;
   }
 
-  const fresh = await downloadAndBuild(env);
-  await saveToKv(env, fresh);
-  inMemoryCache = fresh;
-  return fresh;
+  // If no data in KV, throw error
+  // Data should be uploaded via GitHub Actions workflow
+  throw new Error(
+    'GTFS data not found in cache. Please run the GitHub Actions workflow to initialize the cache.'
+  );
 }
 
 export async function refreshStaticData(env: Env): Promise<void> {
-  const fresh = await downloadAndBuild(env);
-  await saveToKv(env, fresh);
-  inMemoryCache = fresh;
+  // This function is now deprecated - data is updated via GitHub Actions
+  // Just reload from KV
+  const data = await loadFromKv(env);
+  if (data) {
+    inMemoryCache = data;
+  }
 }
 
 export function lookupStopName(data: StaticData, stopId: string): string {

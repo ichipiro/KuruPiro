@@ -101,13 +101,14 @@ function matchRoute(pathname: string): { handler: string; params: Record<string,
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
       const url = new URL(request.url);
       const match = matchRoute(url.pathname);
       if (!match) {
         return new Response('Not Found', { status: 404 });
       }
+
       switch (match.handler) {
         case 'nextBus':
           return await handleNextBus(request, env, match.params);
@@ -120,11 +121,13 @@ export default {
       }
     } catch (error) {
       console.error('Worker error', error);
-      return Response.json({ error: 'Internal Server Error' }, { status: 500 });
+      const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
+      return Response.json({ error: errorMessage }, { status: 500 });
     }
   },
 
-  async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    // Refresh in-memory cache from KV (data is updated by GitHub Actions)
     await refreshStaticData(env);
   },
 };
