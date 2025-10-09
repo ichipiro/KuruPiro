@@ -62,18 +62,36 @@ async function handleNextBus(
     });
   }
 
-  return Response.json(items);
+  return Response.json(items, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
 }
 
 async function handleStopName(env: Env, params: Record<string, string>): Promise<Response> {
   const stopId = params.stop_id;
   const staticData = await getStaticData(env);
   const name = lookupStopName(staticData, stopId);
-  return Response.json({ stop_id: stopId, name });
+  return Response.json({ stop_id: stopId, name }, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
 }
 
 async function handleHealth(): Promise<Response> {
-  return Response.json({ status: 'healthy' });
+  return Response.json({ status: 'healthy' }, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
 }
 
 function matchRoute(pathname: string): { handler: string; params: Record<string, string> } | null {
@@ -102,6 +120,18 @@ function matchRoute(pathname: string): { handler: string; params: Record<string,
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // Handle CORS preflight requests
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Max-Age': '86400',
+        },
+      });
+    }
+
     try {
       const url = new URL(request.url);
       const match = matchRoute(url.pathname);
@@ -122,7 +152,12 @@ export default {
     } catch (error) {
       console.error('Worker error', error);
       const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
-      return Response.json({ error: errorMessage }, { status: 500 });
+      return Response.json({ error: errorMessage }, {
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
     }
   },
 
