@@ -219,16 +219,54 @@ async function main() {
   const payloadStr = JSON.stringify(payload);
   console.log(`Payload size: ${(payloadStr.length / 1024 / 1024).toFixed(2)} MB`);
 
-  console.log('Uploading to Cloudflare KV...');
+  // KVの制限は25MBなので、データを複数のチャンクに分割
+  const MAX_CHUNK_SIZE = 20 * 1024 * 1024; // 20MB (安全マージン)
+
+  if (payloadStr.length > MAX_CHUNK_SIZE) {
+    console.log('Data exceeds 25MB limit. Splitting into chunks...');
+
+    // メタデータを保存
+    const metadata = {
+      version: 1,
+      chunkCount: Math.ceil(payloadStr.length / MAX_CHUNK_SIZE),
+      totalSize: payloadStr.length,
+      generatedAt: data.generatedAt,
+    };
+
+    console.log(`Splitting into ${metadata.chunkCount} chunks...`);
+
+    // メタデータをアップロード
+    console.log('Uploading metadata...');
+    await uploadToKV('gtfs:static:meta', JSON.stringify(metadata));
+
+    // チャンクをアップロード
+    for (let i = 0; i < metadata.chunkCount; i++) {
+      const start = i * MAX_CHUNK_SIZE;
+      const end = Math.min(start + MAX_CHUNK_SIZE, payloadStr.length);
+      const chunk = payloadStr.slice(start, end);
+
+      console.log(`Uploading chunk ${i + 1}/${metadata.chunkCount} (${(chunk.length / 1024 / 1024).toFixed(2)} MB)...`);
+      await uploadToKV(`gtfs:static:chunk:${i}`, chunk);
+    }
+
+    console.log('✓ Successfully uploaded GTFS data in chunks!');
+  } else {
+    console.log('Uploading to Cloudflare KV...');
+    await uploadToKV('gtfs:static', payloadStr);
+    console.log('✓ Successfully uploaded GTFS data!');
+  }
+}
+
+async function uploadToKV(key, value) {
   const kvResponse = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/storage/kv/namespaces/${KV_NAMESPACE_ID}/values/gtfs:static`,
+    `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/storage/kv/namespaces/${KV_NAMESPACE_ID}/values/${key}`,
     {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${API_TOKEN}`,
-        'Content-Type': 'application/json',
+        'Content-Type': 'text/plain',
       },
-      body: payloadStr,
+      body: value,
     }
   );
 
@@ -236,9 +274,6 @@ async function main() {
     const error = await kvResponse.text();
     throw new Error(`Failed to upload to KV: ${kvResponse.status} ${error}`);
   }
-
-  console.log('✓ Successfully uploaded GTFS data to KV!');
-  console.log('Data will be available to Worker immediately.');
 }
 
 main().catch((error) => {

@@ -96,6 +96,32 @@ function shouldRefresh(data: StaticData | null): boolean {
 }
 
 async function loadFromKv(env: Env): Promise<StaticData | null> {
+  // まずメタデータを確認
+  const metaStr = await env.GTFS_CACHE.get('gtfs:static:meta');
+
+  if (metaStr) {
+    // チャンク形式のデータ
+    const meta = JSON.parse(metaStr);
+    console.log(`Loading ${meta.chunkCount} chunks from KV...`);
+
+    let fullData = '';
+    for (let i = 0; i < meta.chunkCount; i++) {
+      const chunk = await env.GTFS_CACHE.get(`gtfs:static:chunk:${i}`);
+      if (!chunk) {
+        console.error(`Missing chunk ${i}`);
+        return null;
+      }
+      fullData += chunk;
+    }
+
+    const parsed = JSON.parse(fullData) as CachedStaticData;
+    if (!parsed || parsed.version !== CACHE_VERSION) {
+      return null;
+    }
+    return parsed.data;
+  }
+
+  // 従来の単一キー形式
   const stored = await env.GTFS_CACHE.get(CACHE_KEY, 'json');
   if (!stored) return null;
   const parsed = stored as CachedStaticData;
