@@ -1,0 +1,16 @@
+name = "kuru-piro-worker"
+main = "src/index.ts"
+compatibility_date = "2024-04-15"
+
+[vars]
+GTFS_STATIC_URL = "https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip"
+GTFS_REALTIME_URL = "https://ajt-mobusta-gtfs.mcapps.jp/realtime/8"
+REALTIME_UPDATE_INTERVAL = "15"
+
+[[kv_namespaces]]
+binding = "GTFS_CACHE"
+id = ""
+preview_id = ""
+
+[triggers]
+crons = ["0 3 * * *"]
