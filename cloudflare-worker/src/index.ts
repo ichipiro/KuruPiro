@@ -1,4 +1,4 @@
-import { findTripsForStops, getStaticData, lookupStopName, refreshStaticData } from './staticData';
+import { findTripsForStops, lookupStopName } from './staticData';
 import { getRealtimeDelay } from './realtime';
 import { Env, NextBusResponseItem } from './types';
 
@@ -35,11 +35,10 @@ async function handleNextBus(
   const url = new URL(request.url);
   const responseSize = Number.parseInt(url.searchParams.get('response_size') ?? '5', 10);
 
-  const staticData = await getStaticData(env);
   const jsDay = new Date().getDay();
   const weekday = (jsDay + 6) % 7;
 
-  const trips = findTripsForStops(staticData, originId, destinationId, weekday);
+  const trips = await findTripsForStops(env, originId, destinationId, weekday);
   const limitedTrips = trips.slice(0, Math.max(1, Math.min(20, responseSize)));
 
   const items: NextBusResponseItem[] = [];
@@ -73,8 +72,7 @@ async function handleNextBus(
 
 async function handleStopName(env: Env, params: Record<string, string>): Promise<Response> {
   const stopId = params.stop_id;
-  const staticData = await getStaticData(env);
-  const name = lookupStopName(staticData, stopId);
+  const name = await lookupStopName(env, stopId);
   return Response.json({ stop_id: stopId, name }, {
     headers: {
       'Access-Control-Allow-Origin': '*',
@@ -161,8 +159,8 @@ export default {
     }
   },
 
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    // Refresh in-memory cache from KV (data is updated by GitHub Actions)
-    await refreshStaticData(env);
+  async scheduled(_event: ScheduledEvent, _env: Env, _ctx: ExecutionContext): Promise<void> {
+    // No-op: D1 data is refreshed by GitHub Actions
+    // This cron job is no longer needed but kept for compatibility
   },
 };

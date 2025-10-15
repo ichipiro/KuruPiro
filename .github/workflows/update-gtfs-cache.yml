@@ -24,12 +24,12 @@ jobs:
           cd cloudflare-worker
           npm ci
 
-      - name: Build and upload GTFS data to KV
+      - name: Build and upload GTFS data to D1
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+          CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
           GTFS_STATIC_URL: 'https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip'
         run: |
           cd cloudflare-worker
-          node scripts/build-and-upload.mjs
+          node scripts/build-and-upload-d1.mjs

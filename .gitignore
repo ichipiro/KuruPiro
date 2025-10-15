@@ -27,3 +27,6 @@ back/venv
 
 __pycache__
 .env
+
+# Wrangler
+.wrangler/
