@@ -19,14 +19,12 @@ function NextBusesList() {
       try {
         const piroResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/22030_2/51240_', {
           method: "GET",
-          credentials: "include",
         });
         const piroData = await piroResponse.json();
         setPiroData(piroData);
         console.log(piroData)
         const numaResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/24140_1/51240_', {
           method: "GET",
-          credentials: "include",
         });
         const numaData = await numaResponse.json();
         setNumaData(numaData);

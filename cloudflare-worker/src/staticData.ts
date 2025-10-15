@@ -100,18 +100,26 @@ async function loadFromKv(env: Env): Promise<StaticData | null> {
   const metaStr = await env.GTFS_CACHE.get('gtfs:static:meta');
 
   if (metaStr) {
-    // チャンク形式のデータ
+    // チャンク形式のデータ - 並列読み込み
     const meta = JSON.parse(metaStr);
-    console.log(`Loading ${meta.chunkCount} chunks from KV...`);
+    console.log(`Loading ${meta.chunkCount} chunks from KV in parallel...`);
 
-    let fullData = '';
+    // 全チャンクを並列で取得
+    const chunkPromises = [];
     for (let i = 0; i < meta.chunkCount; i++) {
-      const chunk = await env.GTFS_CACHE.get(`gtfs:static:chunk:${i}`);
-      if (!chunk) {
+      chunkPromises.push(env.GTFS_CACHE.get(`gtfs:static:chunk:${i}`));
+    }
+
+    const chunks = await Promise.all(chunkPromises);
+
+    // チャンクを結合
+    let fullData = '';
+    for (let i = 0; i < chunks.length; i++) {
+      if (!chunks[i]) {
         console.error(`Missing chunk ${i}`);
         return null;
       }
-      fullData += chunk;
+      fullData += chunks[i];
     }
 
     const parsed = JSON.parse(fullData) as CachedStaticData;
