@@ -229,8 +229,63 @@ async function uploadToD1(sql) {
   }
 }
 
+async function getCurrentETag() {
+  try {
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/d1/database/${DATABASE_ID}/query`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${API_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sql: "SELECT value FROM gtfs_metadata WHERE key = 'gtfs_etag'"
+        })
+      }
+    );
+
+    if (!response.ok) {
+      console.log('Could not fetch current ETag (database might be empty)');
+      return null;
+    }
+
+    const result = await response.json();
+    if (result.success && result.result?.[0]?.results?.length > 0) {
+      return result.result[0].results[0].value;
+    }
+    return null;
+  } catch (error) {
+    console.log('Error fetching current ETag:', error.message);
+    return null;
+  }
+}
+
 async function main() {
-  console.log('Downloading GTFS data from:', GTFS_URL);
+  // Step 1: Check ETag without downloading
+  console.log('Checking GTFS data ETag from:', GTFS_URL);
+  const headResponse = await fetch(GTFS_URL, { method: 'HEAD' });
+  if (!headResponse.ok) {
+    throw new Error(`Failed to check GTFS data: ${headResponse.status}`);
+  }
+
+  const newETag = headResponse.headers.get('etag')?.replace(/"/g, '');
+  const lastModified = headResponse.headers.get('last-modified');
+  console.log(`Remote ETag: ${newETag}`);
+  console.log(`Last Modified: ${lastModified}`);
+
+  const currentETag = await getCurrentETag();
+  console.log(`Current ETag in D1: ${currentETag || 'none'}`);
+
+  if (currentETag === newETag) {
+    console.log('✓ GTFS data unchanged (ETag match). Skipping update.');
+    return;
+  }
+
+  console.log('GTFS data changed. Downloading and updating D1...');
+
+  // Step 2: Download and process
+  console.log('Downloading GTFS data...');
   const response = await fetch(GTFS_URL);
   if (!response.ok) {
     throw new Error(`Failed to download GTFS: ${response.status}`);
@@ -247,8 +302,16 @@ async function main() {
   const sql = generateInsertStatements(files);
   console.log(`Generated ${sql.split('\n').length} SQL statements`);
 
+  // Step 3: Upload to D1
   await uploadToD1(sql);
+
+  // Step 4: Save new ETag
+  console.log('Saving new ETag to D1...');
+  const etagSql = `INSERT INTO gtfs_metadata (key, value, updated_at) VALUES ('gtfs_etag', '${newETag}', ${Date.now()}) ON CONFLICT(key) DO UPDATE SET value = '${newETag}', updated_at = ${Date.now()};`;
+  await uploadToD1(etagSql);
+
   console.log('✓ Successfully uploaded GTFS data to D1!');
+  console.log(`✓ Updated ETag to: ${newETag}`);
 }
 
 main().catch((error) => {
