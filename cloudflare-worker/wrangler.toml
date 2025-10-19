@@ -13,5 +13,10 @@ binding = "GTFS_CACHE"
 id = "49a3e4dd915c4ba08ba21c20cdf0793c"
 preview_id = "2d375ea9773e409a9196248637516aea"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "kurupiro-db"
+database_id = "072a7020-ff60-4958-8def-48017c0df486"
+
 [triggers]
 crons = ["0 3 * * *"]

@@ -27,3 +27,9 @@ back/venv
 
 __pycache__
 .env
+
+# Wrangler
+.wrangler/
+
+# Temporary SQL files (generated for local development)
+cloudflare-worker/scripts/temp-import*.sql

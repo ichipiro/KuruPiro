@@ -1,4 +1,5 @@
 export interface Env {
+  DB: D1Database;
   GTFS_CACHE: KVNamespace;
   GTFS_STATIC_URL: string;
   GTFS_REALTIME_URL: string;
