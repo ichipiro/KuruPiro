@@ -187,7 +187,7 @@ async function main() {
   console.log('Processing GTFS data...');
   const sql = generateInsertStatements(files);
 
-  const sqlFile = './scripts/temp-import-local.sql';
+  const sqlFile = './database/scripts/temp-import-local.sql';
   writeFileSync(sqlFile, sql);
   console.log(`Wrote SQL to ${sqlFile}`);
   console.log(`Total statements: ${sql.split('\n').filter(l => l.trim() && !l.startsWith('--')).length}`);
