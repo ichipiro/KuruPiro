@@ -30,3 +30,6 @@ __pycache__
 
 # Wrangler
 .wrangler/
+
+# Temporary SQL files (generated for local development)
+cloudflare-worker/scripts/temp-import*.sql
