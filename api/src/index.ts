@@ -2,6 +2,16 @@ import { findTripsForStops, lookupStopName } from './staticData';
 import { getRealtimeDelay } from './realtime';
 import { Env, NextBusResponseItem } from './types';
 
+/**
+ * Get current time in JST (UTC+9)
+ */
+function getJSTNow(): Date {
+  const now = new Date();
+  const utcTime = now.getTime();
+  const jstOffset = 9 * 60 * 60 * 1000; // 9 hours in milliseconds
+  return new Date(utcTime + jstOffset);
+}
+
 function formatRemainingTime(minutes: number): string {
   if (minutes <= 1) {
     return 'まもなく到着';
@@ -17,10 +27,10 @@ function formatDelay(delayMinutes: number): string {
 }
 
 function calculateRemainingMinutes(targetTime: string, delaySeconds = 0): number {
-  const now = new Date();
+  const now = getJSTNow();
   const [hour, minute, second] = targetTime.split(':').map((part) => Number.parseInt(part, 10));
   const target = new Date(now);
-  target.setHours(hour, minute, second, 0);
+  target.setUTCHours(hour, minute, second, 0);
   const diff = target.getTime() + delaySeconds * 1000 - now.getTime();
   return Math.max(0, Math.floor(diff / 60000));
 }
@@ -35,7 +45,8 @@ async function handleNextBus(
   const url = new URL(request.url);
   const responseSize = Number.parseInt(url.searchParams.get('response_size') ?? '5', 10);
 
-  const jsDay = new Date().getDay();
+  const jstNow = getJSTNow();
+  const jsDay = jstNow.getUTCDay();
   const weekday = (jsDay + 6) % 7;
 
   const trips = await findTripsForStops(env, originId, destinationId, weekday);
