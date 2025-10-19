@@ -21,7 +21,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd cloudflare-worker
+          cd api
           npm ci
 
       - name: Build and upload GTFS data to D1
@@ -31,5 +31,5 @@ jobs:
           CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
           GTFS_STATIC_URL: 'https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip'
         run: |
-          cd cloudflare-worker
-          node scripts/build-and-upload-d1.mjs
+          cd api
+          node database/scripts/build-and-upload-d1.mjs
