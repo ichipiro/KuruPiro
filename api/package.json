@@ -12,6 +12,7 @@
   "dependencies": {
     "@types/pbf": "^3.0.5",
     "fflate": "^0.8.1",
+    "hono": "^4.10.1",
     "pbf": "^4.0.1"
   },
   "devDependencies": {

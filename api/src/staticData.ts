@@ -20,6 +20,7 @@ export async function findTripsForStops(
   originStopId: string,
   destinationPattern: string,
   weekday: number,
+  currentTime?: string,
 ) {
   const normalizedOrigin = normalizeStopId(originStopId);
   const normalizedDestination = normalizeStopId(destinationPattern);
@@ -35,6 +36,7 @@ export async function findTripsForStops(
 
   // Query to find trips that stop at both origin and destination
   // Uses CTEs for clarity and performance
+  const timeFilter = currentTime ? `AND o.arrival_time >= ?3` : '';
   const query = `
     WITH origin_stops AS (
       SELECT trip_id, stop_sequence, arrival_time
@@ -59,13 +61,17 @@ export async function findTripsForStops(
     JOIN gtfs_trips t ON o.trip_id = t.trip_id
     JOIN gtfs_calendar c ON t.service_id = c.service_id
     JOIN gtfs_routes r ON t.route_id = r.route_id
-    WHERE c.${weekdayColumn} = 1
+    WHERE c.${weekdayColumn} = 1 ${timeFilter}
     ORDER BY o.arrival_time
   `;
 
   const bindValue = destinationIsPrefix ? `${destinationPrefix}%` : destinationPrefix;
+  const bindings = currentTime
+    ? [normalizedOrigin, bindValue, currentTime]
+    : [normalizedOrigin, bindValue];
+
   const results = await env.DB.prepare(query)
-    .bind(normalizedOrigin, bindValue)
+    .bind(...bindings)
     .all<{
       trip_id: string;
       arrival_time: string;
