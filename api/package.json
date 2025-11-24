@@ -19,6 +19,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240405.0",
     "@tsconfig/recommended": "^1.0.3",
+    "@types/node": "^24.10.1",
     "drizzle-kit": "^0.31.7",
     "prettier": "^3.2.5",
     "typescript": "^5.4.2",
