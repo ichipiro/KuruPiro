@@ -17,12 +17,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - name: Install dependencies
-        run: |
-          cd api
-          npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build and upload GTFS data to D1
         env:
@@ -31,5 +34,4 @@ jobs:
           CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
           GTFS_STATIC_URL: 'https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip'
         run: |
-          cd api
-          node database/scripts/build-and-upload-d1.mjs
+          pnpm --filter database run update:prod
