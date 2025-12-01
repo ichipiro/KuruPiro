@@ -28,20 +28,20 @@ services:
     networks:
       - kurupiro_net
 
-  reverse-proxy:
-    build:
-      context: ./nginx
-      dockerfile: Dockerfile
-    container_name: reverse-proxy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    env_file:
-      - .env
-    depends_on:
-      - web
-    networks:
-      - kurupiro_net
+  # reverse-proxy:
+  #   build:
+  #     context: ./nginx
+  #     dockerfile: Dockerfile
+  #   container_name: reverse-proxy
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     - web
+  #   networks:
+  #     - kurupiro_net
 
 networks:
   kurupiro_net:

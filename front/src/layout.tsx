@@ -34,4 +34,13 @@ const Layout = () => {
   );
 };
 
+export const SignageLayout = () => {
+  useRedirect();
+  return (
+    <>
+      <Outlet />
+    </>
+  );
+};
+
 export default Layout;
