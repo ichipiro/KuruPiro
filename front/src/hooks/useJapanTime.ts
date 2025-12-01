@@ -21,10 +21,16 @@ async function fetchAndSetOffset() {
   }
 }
 
-// 初回取得と1時間ごとの同期
+// 初回取得と定期的な同期（8:00-22:00の運用中に3回程度）
 if (typeof window !== 'undefined') {
   fetchAndSetOffset()
-  setInterval(fetchAndSetOffset, 60 * 60 * 1000)
+  // 約4.5時間ごとに同期（14時間の運用で約3回）
+  setInterval(fetchAndSetOffset, 4.5 * 60 * 60 * 1000)
+  
+  // 24時間ごとにページをリロード（メモリリーク対策）
+  setTimeout(() => {
+    window.location.reload()
+  }, 24 * 60 * 60 * 1000)
 }
 
 // 日本時間のDateオブジェクトを取得
