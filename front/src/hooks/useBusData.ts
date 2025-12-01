@@ -88,7 +88,7 @@ export function useBusData(stopId: string): UseBusDataReturn {
   const data = useMemo(() => {
     if (!rawData) return []
     
-    return rawData.slice(0, 4).map(bus => {
+    return rawData.map(bus => {
       const scheduledTime = bus.arrival_time.substring(0, 5) // "HH:MM"
       const delayMinutes = parseInt(bus.delay) || 0
       const delayedTime = calculateDelayedTime(scheduledTime, delayMinutes)

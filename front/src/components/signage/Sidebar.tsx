@@ -11,7 +11,7 @@ type SidebarProps = {
 
 export default function Sidebar({ currentTime, temperature, weatherIcon }: SidebarProps) {
   return (
-    <div className="bg-[#FFD06C] h-full p-[24px] flex flex-col gap-[20px]">
+    <div className="bg-[#FFD06C] h-full p-[1.25vw] flex flex-col gap-[1.04vw]">
       <SidebarHeader currentTime={currentTime} temperature={temperature} weatherIcon={weatherIcon} />
       <SidebarLogo />
       <SidebarAdvertisement />
