@@ -120,9 +120,12 @@ export function useBusData(stopId: string): UseBusDataReturn {
       .filter(bus => bus.remainingSeconds >= 0) // 発車済みのバスを除外
   }, [rawData, currentTime])
 
-  // バスが消えたら即座に再取得（3秒以上間隔を空ける）
+  // バスが消えた、または消えそうな時に再取得（3秒以上間隔を空ける）
   const now = Date.now()
-  if (data.length < prevBusCountRef.current && now - lastMutateRef.current > 3000) {
+  const hasExpiringBus = data.some(bus => bus.remainingSeconds <= 3 && bus.remainingSeconds >= 0)
+  const busCountDecreased = data.length < prevBusCountRef.current
+
+  if ((busCountDecreased || hasExpiringBus) && now - lastMutateRef.current > 3000) {
     lastMutateRef.current = now
     mutate()
   }
