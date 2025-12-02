@@ -9,7 +9,7 @@ type BusData = {
   via: string;
   scheduledTime: string;
   delayedTime?: string;
-  remainingMinutes: number;
+  remainingSeconds: number;
 }
 
 type UseBusDataReturn = {
@@ -41,21 +41,22 @@ function calculateDelayedTime(scheduledTime: string, delayMinutes: number): stri
   return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`
 }
 
-// 日本時間から残り時間（分）を計算
-function calculateRemainingMinutes(targetTime: string, japanDate: Date): number {
+// 日本時間から残り時間（秒）を計算（過ぎた場合は-1を返す）
+function calculateRemainingSeconds(targetTime: string, japanDate: Date): number {
   const [hours, minutes] = targetTime.split(':').map(Number)
   
   // 今日の目標時刻を作成
   const targetDate = new Date(japanDate)
   targetDate.setHours(hours, minutes, 0, 0)
   
-  // 目標時刻が現在時刻より前の場合、翌日として扱う
-  if (targetDate.getTime() < japanDate.getTime()) {
-    targetDate.setDate(targetDate.getDate() + 1)
+  const diffMs = targetDate.getTime() - japanDate.getTime()
+  
+  // 発車時刻を過ぎた場合は-1を返す
+  if (diffMs < 0) {
+    return -1
   }
   
-  const diffMs = targetDate.getTime() - japanDate.getTime()
-  return Math.max(0, Math.floor(diffMs / 1000 / 60))
+  return Math.floor(diffMs / 1000)
 }
 
 export function useBusData(stopId: string): UseBusDataReturn {
@@ -84,28 +85,30 @@ export function useBusData(stopId: string): UseBusDataReturn {
     return () => clearInterval(interval)
   }, [])
 
-  // 残り時間を日本時間から計算
+  // 残り時間を日本時間から計算（発車済みのバスは除外）
   const data = useMemo(() => {
     if (!rawData) return []
     
-    return rawData.slice(0, 4).map(bus => {
-      const scheduledTime = bus.arrival_time.substring(0, 5) // "HH:MM"
-      const delayMinutes = parseInt(bus.delay) || 0
-      const delayedTime = calculateDelayedTime(scheduledTime, delayMinutes)
-      
-      // 遅延がある場合は遅延時刻から、ない場合は予定時刻から残り時間を計算
-      const targetTime = delayedTime || scheduledTime
-      const remainingMinutes = calculateRemainingMinutes(targetTime, currentTime)
-      
-      return {
-        busId: bus.trip_short_id,
-        destination: bus.trip_dest,
-        via: getVia(bus.trip_short_id),
-        scheduledTime,
-        delayedTime,
-        remainingMinutes,
-      }
-    })
+    return rawData
+      .map(bus => {
+        const scheduledTime = bus.arrival_time.substring(0, 5) // "HH:MM"
+        const delayMinutes = parseInt(bus.delay) || 0
+        const delayedTime = calculateDelayedTime(scheduledTime, delayMinutes)
+        
+        // 遅延がある場合は遅延時刻から、ない場合は予定時刻から残り時間を計算
+        const targetTime = delayedTime || scheduledTime
+        const remainingSeconds = calculateRemainingSeconds(targetTime, currentTime)
+        
+        return {
+          busId: bus.trip_short_id,
+          destination: bus.trip_dest,
+          via: getVia(bus.trip_short_id),
+          scheduledTime,
+          delayedTime,
+          remainingSeconds,
+        }
+      })
+      .filter(bus => bus.remainingSeconds >= 0) // 発車済みのバスを除外
   }, [rawData, currentTime])
 
   return {

@@ -11,13 +11,13 @@ type SidebarProps = {
 
 export default function Sidebar({ currentTime, temperature, weatherIcon }: SidebarProps) {
   return (
-    <div className="bg-[#FFD06C] h-full p-[24px] flex flex-col gap-[20px]">
+    <div className="bg-[#FFD06C] h-full p-[1.5vw] flex flex-col gap-[1.2vw]">
       <SidebarHeader currentTime={currentTime} temperature={temperature} weatherIcon={weatherIcon} />
       <SidebarLogo />
-      <SidebarAdvertisement />
-      <div className="mt-auto">
-        <SidebarFooter />
+      <div className="flex-1 min-h-0 flex flex-col">
+        <SidebarAdvertisement />
       </div>
+      <SidebarFooter />
     </div>
   )
 }

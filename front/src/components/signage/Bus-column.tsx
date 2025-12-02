@@ -7,12 +7,12 @@ type BusColumnProps = {
 
 export default function BusColumn({ stopName, children }: BusColumnProps) {
   return (
-    <div className="flex flex-col gap-[16px] w-full items-center">
-      <div className="border-[3px] border border-white px-[24px] py-[12px] flex items-center justify-between w-[434px]">
-        <h2 className="text-white text-[32px] font-bold">{stopName}</h2>
-        <img src={busIcon} alt="バス" className="h-[40px]" />
+    <div className="flex flex-col h-full w-full items-center">
+      <div className="border-[0.18vw] border border-white px-[1.5vw] py-[0.75vw] flex items-center justify-between w-[26vw]">
+        <h2 className="text-white text-[2vw] font-bold">{stopName}</h2>
+        <img src={busIcon} alt="バス" className="h-[2.5vw]" />
       </div>
-      <div className="flex flex-col gap-[12px] items-center">
+      <div className="flex flex-col justify-between flex-1 py-[1vw] items-center w-full">
         {children}
       </div>
     </div>

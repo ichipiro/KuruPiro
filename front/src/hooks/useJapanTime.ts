@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 
 // グローバルなオフセット管理
 let globalOffset = 0
-let offsetInitialized = false
 const offsetListeners: Set<(offset: number) => void> = new Set()
 
 async function fetchAndSetOffset() {
@@ -12,12 +11,10 @@ async function fetchAndSetOffset() {
     const serverTime = new Date(data.datetime).getTime()
     const localTime = Date.now()
     globalOffset = serverTime - localTime
-    offsetInitialized = true
     // すべてのリスナーに通知
     offsetListeners.forEach(listener => listener(globalOffset))
   } catch (error) {
     console.error('NTPサーバーからの時刻取得に失敗:', error)
-    offsetInitialized = true
   }
 }
 
