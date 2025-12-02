@@ -72,7 +72,7 @@ export function useBusData(stopId: string): UseBusDataReturn {
     {
       refreshInterval: 30 * 1000, // 30秒ごとに更新
       revalidateOnFocus: false,
-      dedupingInterval: 5 * 1000, // 5秒間は重複リクエストを防ぐ
+      dedupingInterval: 1 * 1000, // 1秒間は重複リクエストを防ぐ
     }
   )
 
@@ -81,6 +81,8 @@ export function useBusData(stopId: string): UseBusDataReturn {
 
   // 前回のバス数を追跡（バスが消えたか検知用）
   const prevBusCountRef = useRef(0)
+  // 最後に再取得した時刻（連続再取得を防ぐ）
+  const lastMutateRef = useRef(0)
 
   useEffect(() => {
     // 初回更新
@@ -118,8 +120,10 @@ export function useBusData(stopId: string): UseBusDataReturn {
       .filter(bus => bus.remainingSeconds >= 0) // 発車済みのバスを除外
   }, [rawData, currentTime])
 
-  // バスが消えたら即座に再取得
-  if (data.length < prevBusCountRef.current && data.length > 0) {
+  // バスが消えたら即座に再取得（3秒以上間隔を空ける）
+  const now = Date.now()
+  if (data.length < prevBusCountRef.current && now - lastMutateRef.current > 3000) {
+    lastMutateRef.current = now
     mutate()
   }
   prevBusCountRef.current = data.length
