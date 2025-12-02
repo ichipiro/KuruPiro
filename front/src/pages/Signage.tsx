@@ -21,8 +21,10 @@ export default function Signage() {
   const displayCount = useDisplayCount()
 
   // おすすめロジック:
-  // - 沼田1便目が市大に来ない → 沼田をおすすめ（市大はおすすめなし）
   // - 沼田1便目が市大に来る → 市大をおすすめ（沼田はおすすめなし）
+  // - 沼田1便目が市大に来ない場合:
+  //   - 沼田まで10分以上 かつ 市大1便目より早い → 沼田をおすすめ
+  //   - それ以外 → 市大をおすすめ
   const { numaRecommendedIndex, piroRecommendedIndex } = (() => {
     if (piroData.length === 0 || numaData.length === 0) {
       return { numaRecommendedIndex: -1, piroRecommendedIndex: 0 }
@@ -33,14 +35,23 @@ export default function Signage() {
 
     // 沼田1便目が市大に来るかチェック
     const numaBus = numaData[0]
+    const piroBus = piroData[0]
     const comesToPiro = piroBusSet.has(numaBus.tripId)
 
     if (comesToPiro) {
       // 沼田が市大に来る → 市大をおすすめ
       return { numaRecommendedIndex: -1, piroRecommendedIndex: 0 }
     } else {
-      // 沼田が市大に来ない → 沼田をおすすめ
-      return { numaRecommendedIndex: 0, piroRecommendedIndex: -1 }
+      // 沼田が市大に来ない場合
+      // 沼田まで10分以上(600秒) かつ 市大1便目より早いなら沼田をおすすめ
+      const hasEnoughTime = numaBus.remainingSeconds >= 600
+      const isFasterThanPiro = numaBus.remainingSeconds < piroBus.remainingSeconds
+      if (hasEnoughTime && isFasterThanPiro) {
+        return { numaRecommendedIndex: 0, piroRecommendedIndex: -1 }
+      } else {
+        // そうでなければ市大をおすすめ
+        return { numaRecommendedIndex: -1, piroRecommendedIndex: 0 }
+      }
     }
   })()
 
