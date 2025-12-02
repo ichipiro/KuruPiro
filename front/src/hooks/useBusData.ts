@@ -72,39 +72,53 @@ export function useBusData(stopId: string): UseBusDataReturn {
     {
       refreshInterval: 30 * 1000, // 30秒ごとに更新
       revalidateOnFocus: false,
-      dedupingInterval: 1 * 1000, // 1秒間は重複リクエストを防ぐ
+      dedupingInterval: 0, // 重複リクエスト防止を無効化
     }
   )
 
   // 毎秒現在時刻を更新（残り時間の計算用）
   const [currentTime, setCurrentTime] = useState<Date>(() => getJapanDate())
 
-  // 前回のバス数を追跡（バスが消えたか検知用）
-  const prevBusCountRef = useRef(0)
-  // 最後に再取得した時刻（連続再取得を防ぐ）
-  const lastMutateRef = useRef(0)
+  // 前回のAPIデータをキャッシュ（補完用）
+  const [cachedRawData, setCachedRawData] = useState<BusService[]>([])
+  // 前回のrawDataを追跡
+  const prevRawDataRef = useRef<BusService[] | undefined>(undefined)
+  // APIから取得した時点でのバス数（フィルタ前）
+  const rawBusCountRef = useRef(0)
 
   useEffect(() => {
-    // 初回更新
     setCurrentTime(getJapanDate())
-
     const interval = setInterval(() => {
       setCurrentTime(getJapanDate())
     }, 1000)
     return () => clearInterval(interval)
   }, [])
 
+  // rawDataが変わったらキャッシュを更新
+  useEffect(() => {
+    if (rawData && rawData !== prevRawDataRef.current) {
+      prevRawDataRef.current = rawData
+      rawBusCountRef.current = rawData.length
+      setCachedRawData(prev => {
+        const existingIds = new Set(rawData.map(b => `${b.arrival_time}-${b.trip_short_id}`))
+        const additionalBuses = prev.filter(
+          b => !existingIds.has(`${b.arrival_time}-${b.trip_short_id}`)
+        )
+        return [...rawData, ...additionalBuses]
+      })
+    }
+  }, [rawData])
+
   // 残り時間を日本時間から計算（発車済みのバスは除外）
   const data = useMemo(() => {
-    if (!rawData) return []
+    const sourceData = cachedRawData.length > 0 ? cachedRawData : (rawData || [])
+    if (sourceData.length === 0) return []
 
-    return rawData
+    return sourceData
       .map(bus => {
-        const scheduledTime = bus.arrival_time.substring(0, 5) // "HH:MM"
+        const scheduledTime = bus.arrival_time.substring(0, 5)
         const delayMinutes = parseInt(bus.delay) || 0
         const delayedTime = calculateDelayedTime(scheduledTime, delayMinutes)
-
-        // 遅延がある場合は遅延時刻から、ない場合は予定時刻から残り時間を計算
         const targetTime = delayedTime || scheduledTime
         const remainingSeconds = calculateRemainingSeconds(targetTime, currentTime)
 
@@ -117,19 +131,16 @@ export function useBusData(stopId: string): UseBusDataReturn {
           remainingSeconds,
         }
       })
-      .filter(bus => bus.remainingSeconds >= 0) // 発車済みのバスを除外
-  }, [rawData, currentTime])
+      .filter(bus => bus.remainingSeconds >= 0)
+      .sort((a, b) => a.remainingSeconds - b.remainingSeconds)
+      .slice(0, 5)
+  }, [cachedRawData, rawData, currentTime])
 
-  // バスが消えた、または消えそうな時に再取得（3秒以上間隔を空ける）
-  const now = Date.now()
-  const hasExpiringBus = data.some(bus => bus.remainingSeconds <= 3 && bus.remainingSeconds >= 0)
-  const busCountDecreased = data.length < prevBusCountRef.current
-
-  if ((busCountDecreased || hasExpiringBus) && now - lastMutateRef.current > 3000) {
-    lastMutateRef.current = now
-    mutate()
+  // 表示中のバスが5本未満なら即座に再取得（レンダリング中にチェック）
+  if (data.length < 5 && rawBusCountRef.current >= 5) {
+    // 非同期で mutate を呼ぶ（レンダリング中の state 更新を避ける）
+    setTimeout(() => mutate(), 0)
   }
-  prevBusCountRef.current = data.length
 
   return {
     data,
