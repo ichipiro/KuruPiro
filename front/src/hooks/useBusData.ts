@@ -1,5 +1,5 @@
 import useSWR from 'swr'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { BusService } from '../types/api'
 import { getJapanDate } from './useJapanTime'
 
@@ -66,18 +66,21 @@ function calculateRemainingSeconds(targetTime: string, japanDate: Date): number 
 export function useBusData(stopId: string): UseBusDataReturn {
   const apiUrl = `${import.meta.env.VITE_BACKEND_URL}/api/${stopId}/51240_`
 
-  const { data: rawData, error, isLoading } = useSWR<BusService[]>(
+  const { data: rawData, error, isLoading, mutate } = useSWR<BusService[]>(
     apiUrl,
     fetcher,
     {
       refreshInterval: 30 * 1000, // 30秒ごとに更新
       revalidateOnFocus: false,
-      dedupingInterval: 10 * 1000,
+      dedupingInterval: 5 * 1000, // 5秒間は重複リクエストを防ぐ
     }
   )
 
   // 毎秒現在時刻を更新（残り時間の計算用）
   const [currentTime, setCurrentTime] = useState<Date>(() => getJapanDate())
+
+  // 前回のバス数を追跡（バスが消えたか検知用）
+  const prevBusCountRef = useRef(0)
 
   useEffect(() => {
     // 初回更新
@@ -114,6 +117,12 @@ export function useBusData(stopId: string): UseBusDataReturn {
       })
       .filter(bus => bus.remainingSeconds >= 0) // 発車済みのバスを除外
   }, [rawData, currentTime])
+
+  // バスが消えたら即座に再取得
+  if (data.length < prevBusCountRef.current && data.length > 0) {
+    mutate()
+  }
+  prevBusCountRef.current = data.length
 
   return {
     data,
