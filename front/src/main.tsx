@@ -2,10 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import {RouterProvider, createBrowserRouter} from "react-router-dom";
 
-import Layout, { SignageLayout } from "./layout";
-
-import TopPage from "./pages/top.tsx";
-import Disclaimer from "./pages/Disclaimer.tsx";
+import { SignageLayout } from "./layout";
 
 import './css/index.css'
 import Signage from './pages/Signage.tsx';

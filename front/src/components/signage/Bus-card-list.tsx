@@ -8,7 +8,7 @@ type BusCardProps = {
   isRecommended?: boolean;
 }
 
-export default function BusCardList({ busId, via, scheduledTime, delayedTime, remainingSeconds }: BusCardProps) {
+export default function BusCardList({ busId, via, scheduledTime, delayedTime, remainingSeconds, isRecommended = false }: BusCardProps) {
   const displayTime = delayedTime || scheduledTime;
   const isDelayed = !!(delayedTime && delayedTime !== scheduledTime);
   const themeColor = via === '中広町経由' ? '#8400FF' : '#0091FF';
@@ -18,10 +18,10 @@ export default function BusCardList({ busId, via, scheduledTime, delayedTime, re
 
   return (
     <>
-      <div className={`relative rounded-[1.5vw] bg-white w-[26vw] h-[7.5vw] px-[1.2vw] flex flex-col justify-center overflow-hidden`}>
+      <div className={`relative rounded-[1.5vw] bg-white w-[26vw] h-[7.5vw] px-[1.2vw] flex flex-col justify-center overflow-hidden ${isRecommended ? 'border-r-[0.6vw] border-[#FFCB00]' : ''}`}>
         {/* 遅延時の点滅する背景 */}
         {isDelayed && (
-          <div 
+          <div
             className="absolute inset-0 bg-[#FFE5E5] rounded-[1.3vw] animate-pulse-bg"
             style={{
               animation: 'pulseBg 1600ms ease-in-out infinite'

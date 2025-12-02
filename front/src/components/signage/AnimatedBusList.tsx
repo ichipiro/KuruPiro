@@ -14,6 +14,7 @@ type BusData = {
 type AnimatedBusListProps = {
   buses: BusData[];
   displayCount: number;
+  recommendedIndex?: number; // おすすめのバスのインデックス（デフォルト: 0）
 }
 
 // 滑らかなイージング
@@ -29,56 +30,52 @@ const smoothTransition = {
   }
 }
 
-export default function AnimatedBusList({ buses, displayCount }: AnimatedBusListProps) {
+export default function AnimatedBusList({ buses, displayCount, recommendedIndex = 0 }: AnimatedBusListProps) {
   if (buses.length === 0) {
     return <div className="text-white text-center">運行情報がありません</div>
   }
 
   return (
     <AnimatePresence mode="popLayout">
-      {/* 1便目 */}
-      <motion.div
-        key={`main-${buses[0].scheduledTime}-${buses[0].busId}`}
-        layout
-        initial={{ opacity: 0, y: -30, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -60, scale: 0.9 }}
-        transition={smoothTransition}
-      >
-        <BusCard
-          busId={buses[0].busId}
-          destination={buses[0].destination}
-          via={buses[0].via}
-          scheduledTime={buses[0].scheduledTime}
-          delayedTime={buses[0].delayedTime}
-          remainingSeconds={buses[0].remainingSeconds}
-          isRecommended={true}
-        />
-      </motion.div>
+      {buses.slice(0, displayCount).map((bus, index) => {
+        const isRecommended = index === recommendedIndex
+        const isFirst = index === 0
 
-      {/* 2便目以降 */}
-      {buses.slice(1, displayCount).map((bus, index) => (
-        <motion.div
-          key={`list-${bus.scheduledTime}-${bus.busId}`}
-          layout
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -40, scale: 0.95 }}
-          transition={{
-            ...smoothTransition,
-            delay: index * 0.03 // わずかなスタッガー効果
-          }}
-        >
-          <BusCardList
-            busId={bus.busId}
-            destination={bus.destination}
-            via={bus.via}
-            scheduledTime={bus.scheduledTime}
-            delayedTime={bus.delayedTime}
-            remainingSeconds={bus.remainingSeconds}
-          />
-        </motion.div>
-      ))}
+        return (
+          <motion.div
+            key={`${isFirst ? 'main' : 'list'}-${bus.scheduledTime}-${bus.busId}`}
+            layout
+            initial={{ opacity: 0, y: isFirst ? -30 : 30, scale: isFirst ? 0.95 : 1 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: isFirst ? -60 : -40, scale: isFirst ? 0.9 : 0.95 }}
+            transition={{
+              ...smoothTransition,
+              delay: isFirst ? 0 : (index - 1) * 0.03
+            }}
+          >
+            {isFirst ? (
+              <BusCard
+                busId={bus.busId}
+                destination={bus.destination}
+                via={bus.via}
+                scheduledTime={bus.scheduledTime}
+                delayedTime={bus.delayedTime}
+                remainingSeconds={bus.remainingSeconds}
+                isRecommended={isRecommended}
+              />
+            ) : (
+              <BusCardList
+                busId={bus.busId}
+                destination={bus.destination}
+                via={bus.via}
+                scheduledTime={bus.scheduledTime}
+                delayedTime={bus.delayedTime}
+                remainingSeconds={bus.remainingSeconds}
+              />
+            )}
+          </motion.div>
+        )
+      })}
     </AnimatePresence>
   )
 }
