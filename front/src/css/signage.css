@@ -1,5 +1,5 @@
 @import "tailwindcss";
 
 html {
-  font-family: 'Inter', 'Helvetica Neue', 'Arial', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+  font-family: 'Inter', 'Helvetica Neue', 'Arial', 'Hiragino Kaku Gothic ProN', 'Meiryo', "Noto Sans JP", sans-serif;
 }
