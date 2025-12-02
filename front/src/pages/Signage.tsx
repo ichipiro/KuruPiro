@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import BusCard from '../components/signage/Bus-card'
-import BusCardList from '../components/signage/Bus-card-list'
+import AnimatedBusList from '../components/signage/AnimatedBusList'
 import BusColumn from '../components/signage/Bus-column'
 import Sidebar from '../components/signage/Sidebar'
 import { useJapanTime } from '../hooks/useJapanTime'
@@ -59,33 +58,8 @@ export default function Signage() {
           <BusColumn stopName="沼田料金所前">
             {numaLoading ? (
               <div className="text-white text-center">読み込み中...</div>
-            ) : numaData.length === 0 ? (
-              <div className="text-white text-center">運行情報がありません</div>
             ) : (
-              <>
-                {/* 1便目 */}
-                <BusCard
-                  busId={numaData[0].busId}
-                  destination={numaData[0].destination}
-                  via={numaData[0].via}
-                  scheduledTime={numaData[0].scheduledTime}
-                  delayedTime={numaData[0].delayedTime}
-                  remainingMinutes={numaData[0].remainingMinutes}
-                  isRecommended={true}
-                />
-                {/* 2便目以降 */}
-                {numaData.slice(1, displayCount).map((bus, index) => (
-                  <BusCardList
-                    key={index}
-                    busId={bus.busId}
-                    destination={bus.destination}
-                    via={bus.via}
-                    scheduledTime={bus.scheduledTime}
-                    delayedTime={bus.delayedTime}
-                    remainingMinutes={bus.remainingMinutes}
-                  />
-                ))}
-              </>
+              <AnimatedBusList buses={numaData} displayCount={displayCount} />
             )}
           </BusColumn>
         </div>
@@ -95,33 +69,8 @@ export default function Signage() {
           <BusColumn stopName="市立大学前">
             {piroLoading ? (
               <div className="text-white text-center">読み込み中...</div>
-            ) : piroData.length === 0 ? (
-              <div className="text-white text-center">運行情報がありません</div>
             ) : (
-              <>
-                {/* 1便目 */}
-                <BusCard
-                  busId={piroData[0].busId}
-                  destination={piroData[0].destination}
-                  via={piroData[0].via}
-                  scheduledTime={piroData[0].scheduledTime}
-                  delayedTime={piroData[0].delayedTime}
-                  remainingMinutes={piroData[0].remainingMinutes}
-                  isRecommended={true}
-                />
-                {/* 2便目以降 */}
-                {piroData.slice(1, displayCount).map((bus, index) => (
-                  <BusCardList
-                    key={index}
-                    busId={bus.busId}
-                    destination={bus.destination}
-                    via={bus.via}
-                    scheduledTime={bus.scheduledTime}
-                    delayedTime={bus.delayedTime}
-                    remainingMinutes={bus.remainingMinutes}
-                  />
-                ))}
-              </>
+              <AnimatedBusList buses={piroData} displayCount={displayCount} />
             )}
           </BusColumn>
         </div>
