@@ -21,47 +21,51 @@ type UseBusDataReturn = {
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 // 経由を判定（trip_short_idで判断）
+// 西風新都線エリアのバス番号:
+//   中広町経由: 60, 61, 62, 64, 65
+//   横川駅経由: 63
 function getVia(tripShortId: string): string {
-  // 60番台は中広町経由、それ以外は横川駅前経由
-  if (tripShortId.startsWith('60')) {
-    return '中広町経由'
+  // 63番は横川駅前経由
+  if (tripShortId.startsWith('63')) {
+    return '横川駅前経由'
   }
-  return '横川駅前経由'
+  // それ以外の60番台（60, 61, 62, 64, 65）は中広町経由
+  return '中広町経由'
 }
 
 // 遅延時刻を計算
 function calculateDelayedTime(scheduledTime: string, delayMinutes: number): string | undefined {
   if (delayMinutes <= 0) return undefined
-  
+
   const [hours, minutes] = scheduledTime.split(':').map(Number)
   const totalMinutes = hours * 60 + minutes + delayMinutes
   const newHours = Math.floor(totalMinutes / 60) % 24
   const newMinutes = totalMinutes % 60
-  
+
   return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`
 }
 
 // 日本時間から残り時間（秒）を計算（過ぎた場合は-1を返す）
 function calculateRemainingSeconds(targetTime: string, japanDate: Date): number {
   const [hours, minutes] = targetTime.split(':').map(Number)
-  
+
   // 今日の目標時刻を作成
   const targetDate = new Date(japanDate)
   targetDate.setHours(hours, minutes, 0, 0)
-  
+
   const diffMs = targetDate.getTime() - japanDate.getTime()
-  
+
   // 発車時刻を過ぎた場合は-1を返す
   if (diffMs < 0) {
     return -1
   }
-  
+
   return Math.floor(diffMs / 1000)
 }
 
 export function useBusData(stopId: string): UseBusDataReturn {
   const apiUrl = `${import.meta.env.VITE_BACKEND_URL}/api/${stopId}/51240_`
-  
+
   const { data: rawData, error, isLoading } = useSWR<BusService[]>(
     apiUrl,
     fetcher,
@@ -74,11 +78,11 @@ export function useBusData(stopId: string): UseBusDataReturn {
 
   // 毎秒現在時刻を更新（残り時間の計算用）
   const [currentTime, setCurrentTime] = useState<Date>(() => getJapanDate())
-  
+
   useEffect(() => {
     // 初回更新
     setCurrentTime(getJapanDate())
-    
+
     const interval = setInterval(() => {
       setCurrentTime(getJapanDate())
     }, 1000)
@@ -88,17 +92,17 @@ export function useBusData(stopId: string): UseBusDataReturn {
   // 残り時間を日本時間から計算（発車済みのバスは除外）
   const data = useMemo(() => {
     if (!rawData) return []
-    
+
     return rawData
       .map(bus => {
         const scheduledTime = bus.arrival_time.substring(0, 5) // "HH:MM"
         const delayMinutes = parseInt(bus.delay) || 0
         const delayedTime = calculateDelayedTime(scheduledTime, delayMinutes)
-        
+
         // 遅延がある場合は遅延時刻から、ない場合は予定時刻から残り時間を計算
         const targetTime = delayedTime || scheduledTime
         const remainingSeconds = calculateRemainingSeconds(targetTime, currentTime)
-        
+
         return {
           busId: bus.trip_short_id,
           destination: bus.trip_dest,
