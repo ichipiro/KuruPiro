@@ -18,16 +18,15 @@ type AnimatedBusListProps = {
 
 // 滑らかなイージング
 const smoothTransition = {
-  type: "tween",
-  ease: [0.25, 0.1, 0.25, 1], // cubic-bezier for smooth motion
-  duration: 0.5
-}
-
-const layoutTransition = {
-  type: "spring",
-  stiffness: 200,
-  damping: 25,
-  mass: 0.8
+  type: "tween" as const,
+  ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number],
+  duration: 0.5,
+  layout: {
+    type: "spring" as const,
+    stiffness: 200,
+    damping: 25,
+    mass: 0.8
+  }
 }
 
 export default function AnimatedBusList({ buses, displayCount }: AnimatedBusListProps) {
@@ -45,7 +44,6 @@ export default function AnimatedBusList({ buses, displayCount }: AnimatedBusList
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -60, scale: 0.9 }}
         transition={smoothTransition}
-        layoutTransition={layoutTransition}
       >
         <BusCard
           busId={buses[0].busId}
@@ -70,7 +68,6 @@ export default function AnimatedBusList({ buses, displayCount }: AnimatedBusList
             ...smoothTransition,
             delay: index * 0.03 // わずかなスタッガー効果
           }}
-          layoutTransition={layoutTransition}
         >
           <BusCardList
             busId={bus.busId}

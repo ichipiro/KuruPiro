@@ -1,5 +1,3 @@
-import BusBadge from "./Bus-badge";
-
 type BusCardProps = {
   busId: string;
   destination: string;
@@ -10,14 +8,13 @@ type BusCardProps = {
   isRecommended?: boolean;
 }
 
-export default function BusCardList({ busId, destination, via, scheduledTime, delayedTime, remainingSeconds, isRecommended = false }: BusCardProps) {
+export default function BusCardList({ busId, via, scheduledTime, delayedTime, remainingSeconds }: BusCardProps) {
   const displayTime = delayedTime || scheduledTime;
   const isDelayed = !!(delayedTime && delayedTime !== scheduledTime);
   const themeColor = via === '中広町経由' ? '#8400FF' : '#0091FF';
   // 切り上げで表示（9分45秒 → 10分）
   const remainingMinutes = Math.ceil(remainingSeconds / 60);
   const isUnder5Minutes = remainingMinutes < 5;
-  const barColor = (isUnder5Minutes && isRecommended) ? 'bg-[#FFD06C]' : 'bg-[#B4B4B4]';
 
   return (
     <>
