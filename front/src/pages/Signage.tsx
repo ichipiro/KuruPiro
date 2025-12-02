@@ -40,28 +40,28 @@ export default function Signage() {
   const { data: numaData, isLoading: numaLoading } = useNumaBusData()
   const displayCount = useDisplayCount()
 
-  // 沼田のおすすめ: 
-  // 1. 市立大学前の1便目より前に発車する
-  // 2. かつ、市大前に来ないバス（市大のリストに同じバスがない）
-  const numaRecommendedIndex = (() => {
-    if (piroData.length === 0 || numaData.length === 0) return -1
-
-    // 市大に来るバスのセット（busId + scheduledTime で識別）
-    const piroBusSet = new Set(piroData.map(bus => `${bus.busId}-${bus.scheduledTime}`))
-
-    const piroFirstTime = piroData[0].remainingSeconds
-
-    // 沼田1便目が市大1便目より前 かつ 市大に来ないバスならおすすめ
-    const numaBus = numaData[0]
-    const isBeforePiro = numaBus.remainingSeconds < piroFirstTime
-    const comesToPiro = piroBusSet.has(`${numaBus.busId}-${numaBus.scheduledTime}`)
-
-    if (isBeforePiro && !comesToPiro) {
-      return 0
+  // おすすめロジック:
+  // - 沼田1便目が市大に来ない → 沼田をおすすめ（市大はおすすめなし）
+  // - 沼田1便目が市大に来る → 市大をおすすめ（沼田はおすすめなし）
+  const { numaRecommendedIndex, piroRecommendedIndex } = (() => {
+    if (piroData.length === 0 || numaData.length === 0) {
+      return { numaRecommendedIndex: -1, piroRecommendedIndex: 0 }
     }
 
-    // そうでなければおすすめなし
-    return -1
+    // 市大に来るバスのセット（trip_id で識別）
+    const piroBusSet = new Set(piroData.map(bus => bus.tripId))
+
+    // 沼田1便目が市大に来るかチェック
+    const numaBus = numaData[0]
+    const comesToPiro = piroBusSet.has(numaBus.tripId)
+
+    if (comesToPiro) {
+      // 沼田が市大に来る → 市大をおすすめ
+      return { numaRecommendedIndex: -1, piroRecommendedIndex: 0 }
+    } else {
+      // 沼田が市大に来ない → 沼田をおすすめ
+      return { numaRecommendedIndex: 0, piroRecommendedIndex: -1 }
+    }
   })()
 
   return (
@@ -94,7 +94,7 @@ export default function Signage() {
             {piroLoading ? (
               <div className="text-white text-center">読み込み中...</div>
             ) : (
-              <AnimatedBusList buses={piroData} displayCount={displayCount} />
+              <AnimatedBusList buses={piroData} displayCount={displayCount} recommendedIndex={piroRecommendedIndex} />
             )}
           </BusColumn>
         </div>

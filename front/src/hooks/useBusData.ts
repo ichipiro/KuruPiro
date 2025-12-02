@@ -5,6 +5,7 @@ import { getJapanDate } from './useJapanTime'
 
 type BusData = {
   busId: string;
+  tripId: string;
   destination: string;
   via: string;
   scheduledTime: string;
@@ -97,6 +98,7 @@ export function useBusData(stopId: string): UseBusDataReturn {
 
         return {
           busId: bus.trip_short_id,
+          tripId: bus.trip_id,
           destination: bus.trip_dest,
           via: getVia(bus.trip_short_id),
           scheduledTime,
