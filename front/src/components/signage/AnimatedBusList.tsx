@@ -4,6 +4,7 @@ import BusCardList from './Bus-card-list'
 
 type BusData = {
   busId: string;
+  tripId: string;
   destination: string;
   via: string;
   scheduledTime: string;
@@ -14,7 +15,8 @@ type BusData = {
 type AnimatedBusListProps = {
   buses: BusData[];
   displayCount: number;
-  recommendedIndex?: number; // おすすめのバスのインデックス（デフォルト: 0）
+  recommendedIndex?: number;
+  columnId?: string; // カラム識別用（'numa' | 'piro'）
 }
 
 // 滑らかなイージング
@@ -30,7 +32,7 @@ const smoothTransition = {
   }
 }
 
-export default function AnimatedBusList({ buses, displayCount, recommendedIndex = 0 }: AnimatedBusListProps) {
+export default function AnimatedBusList({ buses, displayCount, recommendedIndex = 0, columnId }: AnimatedBusListProps) {
   if (buses.length === 0) {
     return <div className="text-white text-center">運行情報がありません</div>
   }
@@ -52,6 +54,8 @@ export default function AnimatedBusList({ buses, displayCount, recommendedIndex 
               ...smoothTransition,
               delay: isFirst ? 0 : (index - 1) * 0.03
             }}
+            data-trip-id={bus.tripId}
+            data-column={columnId}
           >
             {isFirst ? (
               <BusCard

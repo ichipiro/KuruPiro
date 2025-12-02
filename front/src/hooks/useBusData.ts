@@ -23,10 +23,11 @@ const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 // 経由を判定（trip_short_idで判断）
 // 西風新都線エリアのバス番号:
-//   中広町経由: 60, 61, 62, 64, 65
-//   横川駅経由: 63
+//   奇数(61, 63, 65): 横川駅前経由
+//   偶数(60, 62, 64): 中広町経由
 function getVia(tripShortId: string): string {
-  if (tripShortId.startsWith('63')) {
+  const busNumber = parseInt(tripShortId.substring(0, 2))
+  if (busNumber % 2 === 1) {
     return '横川駅前経由'
   }
   return '中広町経由'
