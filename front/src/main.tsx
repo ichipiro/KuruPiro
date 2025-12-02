@@ -13,24 +13,6 @@ import Signage from './pages/Signage.tsx';
 const router = createBrowserRouter([
   {
     path: "/",
-    element: <Layout />,
-    children: [
-      {
-        index: true,
-        element: <TopPage />,
-      },
-      {
-        path: "disclaimer",
-        element: <Disclaimer />,
-      },
-      {
-        path: "*",
-        element: <h2>404 Not found</h2>,
-      },
-    ],
-  },
-  {
-    path: "/signage",
     element: <SignageLayout />,
     children: [
       {
