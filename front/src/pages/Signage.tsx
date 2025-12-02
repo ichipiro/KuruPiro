@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import AnimatedBusList from '../components/signage/AnimatedBusList'
 import BusColumn from '../components/signage/Bus-column'
 import BusConnectionLines from '../components/signage/BusConnectionLines'
