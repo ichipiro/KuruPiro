@@ -64,7 +64,8 @@ function calculateRemainingSeconds(targetTime: string, japanDate: Date): number 
 }
 
 export function useBusData(stopId: string): UseBusDataReturn {
-  const apiUrl = `${import.meta.env.VITE_BACKEND_URL}/api/${stopId}/51240_`
+  // response_size=6で6本取得し、表示は5本に制限（余裕を持たせる）
+  const apiUrl = `${import.meta.env.VITE_BACKEND_URL}/api/${stopId}/51240_?response_size=6`
 
   const { data: rawData, error, isLoading, mutate } = useSWR<BusService[]>(
     apiUrl,
