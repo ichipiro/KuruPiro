@@ -12,7 +12,7 @@ export default function BusColumn({ stopName, children }: BusColumnProps) {
         <h2 className="text-white text-[2vw] font-bold">{stopName}</h2>
         <img src={busIcon} alt="バス" className="h-[2.5vw]" />
       </div>
-      <div className="flex flex-col justify-between flex-1 py-[1vw] items-center w-full">
+      <div className="flex flex-col justify-start gap-[1.2vw] flex-1 py-[1vw] items-center w-full">
         {children}
       </div>
     </div>
