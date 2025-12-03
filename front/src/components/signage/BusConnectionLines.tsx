@@ -21,9 +21,9 @@ export default function BusConnectionLines({ containerRef }: BusConnectionLinesP
     const container = containerRef.current
     const containerRect = container.getBoundingClientRect()
 
-    // 沼田側と市大側のカードを取得（アクティブな要素のみ）
-    const numaCards = container.querySelectorAll('[data-column="numa"][data-trip-id][data-bus-state="active"]')
-    const piroCards = container.querySelectorAll('[data-column="piro"][data-trip-id][data-bus-state="active"]')
+    // 沼田側と市大側のカードを取得
+    const numaCards = container.querySelectorAll('[data-column="numa"][data-trip-id]')
+    const piroCards = container.querySelectorAll('[data-column="piro"][data-trip-id]')
 
     // 市大側のtripIdをマップ化（同じtripIdは最初の1つだけ）
     const piroMap = new Map<string, Element>()

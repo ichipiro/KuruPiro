@@ -55,9 +55,15 @@ export default function AnimatedBusList({ buses, displayCount, recommendedIndex 
               ...smoothTransition,
               delay: isFirst ? 0 : (index - 1) * 0.03
             }}
+            onAnimationStart={(definition) => {
+              // exitアニメーション開始時に線を消すための属性を削除
+              if (definition === 'exit') {
+                const element = document.querySelector(`[data-trip-id="${bus.tripId}"][data-column="${columnId}"]`)
+                element?.removeAttribute('data-trip-id')
+              }
+            }}
             data-trip-id={bus.tripId}
             data-column={columnId}
-            data-bus-state="active"
           >
             {isFirst ? (
               <BusCard
