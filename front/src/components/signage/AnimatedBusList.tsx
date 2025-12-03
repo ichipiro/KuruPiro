@@ -10,6 +10,7 @@ type BusData = {
   scheduledTime: string;
   delayedTime?: string;
   remainingSeconds: number;
+  currentLocation: string | null;
 }
 
 type AnimatedBusListProps = {
@@ -66,6 +67,7 @@ export default function AnimatedBusList({ buses, displayCount, recommendedIndex 
                 delayedTime={bus.delayedTime}
                 remainingSeconds={bus.remainingSeconds}
                 isRecommended={isRecommended}
+                currentLocation={bus.currentLocation}
               />
             ) : (
               <BusCardList

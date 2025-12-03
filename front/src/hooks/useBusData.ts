@@ -11,6 +11,7 @@ type BusData = {
   scheduledTime: string;
   delayedTime?: string;
   remainingSeconds: number;
+  currentLocation: string | null;
 }
 
 type UseBusDataReturn = {
@@ -106,6 +107,7 @@ export function useBusData(stopId: string, destinations: string = '51240_'): Use
           scheduledTime,
           delayedTime,
           remainingSeconds,
+          currentLocation: bus.current_location,
         }
       })
       .filter(bus => bus.remainingSeconds >= 0)

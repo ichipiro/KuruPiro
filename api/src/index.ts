@@ -1,5 +1,5 @@
 import { findTripsForStops, lookupStopName } from './staticData';
-import { getRealtimeDelay } from './realtime';
+import { getRealtimeDelay, getCurrentLocation } from './realtime';
 import { Env, NextBusResponseItem } from './types';
 
 /**
@@ -55,6 +55,8 @@ async function handleNextBus(
   const items: NextBusResponseItem[] = [];
   for (const trip of limitedTrips) {
     const realtime = await getRealtimeDelay(env, trip.tripId, trip.stopSequence);
+    const currentLocationId = await getCurrentLocation(env, trip.tripId);
+    const currentLocationName = currentLocationId ? await lookupStopName(env, currentLocationId) : null;
     const delayMinutes = realtime.delaySeconds
       ? Math.ceil(realtime.delaySeconds / 60)
       : 0;
@@ -69,6 +71,7 @@ async function handleNextBus(
       remaining_time: formatRemainingTime(remainingMinutes),
       delay: formatDelay(delayMinutes),
       trip_dest: trip.destinationLabel,
+      current_location: currentLocationName,
     });
   }
 

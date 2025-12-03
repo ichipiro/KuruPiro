@@ -178,6 +178,32 @@ export async function getRealtimeDelay(
   }
 }
 
+export async function getCurrentLocation(
+  env: Env,
+  tripId: string,
+): Promise<string | null> {
+  try {
+    const data = await getRealtimeData(env);
+    const trip = data.tripUpdates.find((entry) => entry.tripId === tripId);
+    if (!trip) {
+      return null;
+    }
+
+    // stopTimeUpdatesから最新の通過したバス停を取得
+    const updates = trip.stopTimeUpdates.filter(update => update.stopId);
+    if (updates.length === 0) {
+      return null;
+    }
+
+    // 最後のstopIdを返す
+    const lastUpdate = updates[updates.length - 1];
+    return lastUpdate.stopId || null;
+  } catch (error) {
+    console.error('Failed to obtain current location', error);
+    return null;
+  }
+}
+
 export function resetRealtimeCache(): void {
   realtimeCache = null;
 }

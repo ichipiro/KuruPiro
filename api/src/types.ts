@@ -56,6 +56,7 @@ export interface NextBusResponseItem {
   remaining_time: string;
   delay: string;
   trip_dest: string;
+  current_location: string | null;
 }
 
 export interface RealtimeDelayResult {
