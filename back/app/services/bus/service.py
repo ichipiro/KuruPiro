@@ -63,17 +63,12 @@ class BusService:
         """バスの現在位置（最寄り停留所名）を取得"""
         # リアルタイム位置情報を取得
         position = self.realtime_manager.get_vehicle_position(trip_id)
-        print(f"[DEBUG] trip_id: {trip_id}, position: {position}")
         if position is None or position.latitude is None or position.longitude is None:
-            print(f"[DEBUG] 位置情報なし - position: {position}")
             return None
-
-        print(f"[DEBUG] 位置情報: lat={position.latitude}, lon={position.longitude}")
 
         # この便の経由停留所を取得
         trip_stops = self.static_manager.get_trip_stops(trip_id)
         if trip_stops.empty:
-            print(f"[DEBUG] trip_stopsが空")
             return None
 
         # 最も近い停留所を探す
@@ -90,7 +85,6 @@ class BusService:
                     min_distance = distance
                     nearest_stop_name = stop["stop_name"]
 
-        print(f"[DEBUG] 最寄り停留所: {nearest_stop_name}, 距離: {min_distance}m")
         return nearest_stop_name
 
     def get_next_buses(
