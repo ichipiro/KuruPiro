@@ -51,17 +51,17 @@ class BusService:
         """次のバスの到着時刻を取得"""
         # 出発地のバス停IDを正規化（完全一致）
         origin_stop_id = self._normalize_stop_id(origin_stop_id)
-        # 目的地のバス停IDを正規化
-        destination_pattern = self._normalize_stop_id(destination_stop_id)
+        # 目的地のバス停IDを正規化（カンマ区切りに対応）
+        destination_patterns = [self._normalize_stop_id(dest.strip()) for dest in destination_stop_id.split(",")]
 
         # 現在時刻を取得
         now = datetime.datetime.now(ZoneInfo("Asia/Tokyo"))
         current_seconds = self._convert_time_to_seconds(now.strftime("%H:%M:%S"))
 
-        # 静的データから便を取得
+        # 静的データから便を取得（複数の目的地パターンに対応）
         trips_df = self.static_manager.get_trips_for_stop(
             origin_stop_id,
-            destination_pattern,
+            destination_patterns,
             weekday=now.weekday(),
             is_destination_pattern=True,
         )

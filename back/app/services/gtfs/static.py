@@ -152,13 +152,17 @@ class GTFSStaticManager:
     def get_trips_for_stop(
         self,
         origin_stop_id: str,
-        destination_pattern: str,
+        destination_patterns,
         weekday: int,
         is_destination_pattern: bool = False,
     ) -> pd.DataFrame:
-        """指定されたバス停間の便を取得"""
+        """指定されたバス停間の便を取得（複数の目的地パターンに対応）"""
         if self._gtfs_df is None or self._gtfs_df.empty:
             return pd.DataFrame()
+
+        # destination_patternsが文字列の場合はリストに変換（後方互換性）
+        if isinstance(destination_patterns, str):
+            destination_patterns = [destination_patterns]
 
         df = self._gtfs_df
         df = df[df[WEEKDAY_MAP.get(weekday)] == 1]
@@ -166,19 +170,31 @@ class GTFSStaticManager:
         # 出発バス停の便を抽出（完全一致）
         origin_trips = df[df["stop_id"] == origin_stop_id]
 
-        # 目的地バス停の便を抽出
-        if is_destination_pattern and destination_pattern.endswith("_"):
-            base_pattern = destination_pattern[:-1]
-            dest_trips = df[df["stop_id"].str.startswith(base_pattern)]
-        else:
-            dest_trips = df[df["stop_id"] == destination_pattern]
+        # 複数の目的地パターンに対応
+        all_valid_trips = []
+        for destination_pattern in destination_patterns:
+            # 目的地バス停の便を抽出
+            if is_destination_pattern and destination_pattern.endswith("_"):
+                base_pattern = destination_pattern[:-1]
+                dest_trips = df[df["stop_id"].str.startswith(base_pattern)]
+            else:
+                dest_trips = df[df["stop_id"] == destination_pattern]
 
-        # 同一便のみを抽出
-        valid_trips = pd.merge(origin_trips, dest_trips, on="trip_id")
+            # 同一便のみを抽出
+            valid_trips = pd.merge(origin_trips, dest_trips, on="trip_id")
 
-        # 出発バス停が到着バス停より前にある便のみを抽出
-        valid_trips = valid_trips[
-            valid_trips["stop_sequence_x"] < valid_trips["stop_sequence_y"]
-        ]
+            # 出発バス停が到着バス停より前にある便のみを抽出
+            valid_trips = valid_trips[
+                valid_trips["stop_sequence_x"] < valid_trips["stop_sequence_y"]
+            ]
 
-        return valid_trips.sort_values(by="arrival_time_x")
+            all_valid_trips.append(valid_trips)
+
+        # 全ての結果を結合
+        if all_valid_trips:
+            combined_trips = pd.concat(all_valid_trips, ignore_index=True)
+            # 重複を削除（同じtrip_idが複数の目的地パターンにマッチする場合）
+            combined_trips = combined_trips.drop_duplicates(subset=["trip_id", "stop_sequence_x"])
+            return combined_trips.sort_values(by="arrival_time_x")
+
+        return pd.DataFrame()
