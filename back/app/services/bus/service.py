@@ -45,6 +45,48 @@ class BusService:
             return stop_id.startswith(base_pattern)
         return stop_id == pattern
 
+    def _haversine_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """2点間の距離をメートルで計算（ハバサイン公式）"""
+        R = 6371000  # 地球の半径（メートル）
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        delta_phi = math.radians(lat2 - lat1)
+        delta_lambda = math.radians(lon2 - lon1)
+        
+        a = math.sin(delta_phi / 2) ** 2 + \
+            math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        
+        return R * c
+
+    def _get_current_location(self, trip_id: str) -> Optional[str]:
+        """バスの現在位置（最寄り停留所名）を取得"""
+        # リアルタイム位置情報を取得
+        position = self.realtime_manager.get_vehicle_position(trip_id)
+        if position is None or position.latitude is None or position.longitude is None:
+            return None
+
+        # この便の経由停留所を取得
+        trip_stops = self.static_manager.get_trip_stops(trip_id)
+        if trip_stops.empty:
+            return None
+
+        # 最も近い停留所を探す
+        min_distance = float('inf')
+        nearest_stop_name = None
+
+        for _, stop in trip_stops.iterrows():
+            if stop["stop_lat"] is not None and stop["stop_lon"] is not None:
+                distance = self._haversine_distance(
+                    position.latitude, position.longitude,
+                    float(stop["stop_lat"]), float(stop["stop_lon"])
+                )
+                if distance < min_distance:
+                    min_distance = distance
+                    nearest_stop_name = stop["stop_name"]
+
+        return nearest_stop_name
+
     def get_next_buses(
         self, origin_stop_id: str, destination_stop_id: str, max_results: int = 5
     ) -> List[BusNextArrival]:
@@ -89,6 +131,9 @@ class BusService:
                     (actual_departure_seconds - current_seconds) / 60
                 )
 
+                # 現在位置を取得
+                current_location = self._get_current_location(trip["trip_id"])
+
                 next_bus = BusNextArrival(
                     trip_id=trip["trip_id"],
                     route_name=trip["route_short_name_x"],
@@ -97,6 +142,7 @@ class BusService:
                     remaining=remainning,
                     trip_dest=trip["destination_stop_x"],
                     delay=math.ceil(delay_seconds / 60),
+                    current_location=current_location,
                 )
                 results.append(next_bus)
 
