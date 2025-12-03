@@ -46,7 +46,7 @@ export default function AnimatedBusList({ buses, displayCount, recommendedIndex 
 
         return (
           <motion.div
-            key={`${isFirst ? 'main' : 'list'}-${bus.scheduledTime}-${bus.busId}`}
+            key={`${bus.tripId}-${bus.scheduledTime}`}
             layout
             initial={{ opacity: 0, y: isFirst ? -30 : 30, scale: isFirst ? 0.95 : 1 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -57,6 +57,7 @@ export default function AnimatedBusList({ buses, displayCount, recommendedIndex 
             }}
             data-trip-id={bus.tripId}
             data-column={columnId}
+            data-bus-state="active"
           >
             {isFirst ? (
               <BusCard

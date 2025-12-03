@@ -21,22 +21,28 @@ export default function BusConnectionLines({ containerRef }: BusConnectionLinesP
     const container = containerRef.current
     const containerRect = container.getBoundingClientRect()
 
-    // 沼田側と市大側のカードを取得
-    const numaCards = container.querySelectorAll('[data-column="numa"][data-trip-id]')
-    const piroCards = container.querySelectorAll('[data-column="piro"][data-trip-id]')
+    // 沼田側と市大側のカードを取得（アクティブな要素のみ）
+    const numaCards = container.querySelectorAll('[data-column="numa"][data-trip-id][data-bus-state="active"]')
+    const piroCards = container.querySelectorAll('[data-column="piro"][data-trip-id][data-bus-state="active"]')
 
-    // 市大側のtripIdをマップ化
+    // 市大側のtripIdをマップ化（同じtripIdは最初の1つだけ）
     const piroMap = new Map<string, Element>()
     piroCards.forEach(card => {
       const tripId = card.getAttribute('data-trip-id')
-      if (tripId) piroMap.set(tripId, card)
+      if (tripId && !piroMap.has(tripId)) {
+        piroMap.set(tripId, card)
+      }
     })
 
     // 沼田側のカードとマッチする市大側のカードを線で結ぶ
     const newLines: Line[] = []
+    const processedTripIds = new Set<string>()
+
     numaCards.forEach(numaCard => {
       const tripId = numaCard.getAttribute('data-trip-id')
-      if (!tripId) return
+      if (!tripId || processedTripIds.has(tripId)) return
+
+      processedTripIds.add(tripId)
 
       const piroCard = piroMap.get(tripId)
       if (!piroCard) return
