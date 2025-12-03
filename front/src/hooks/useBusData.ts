@@ -71,7 +71,7 @@ export function useBusData(stopId: string, destinations: string = '51240_'): Use
     apiUrl,
     fetcher,
     {
-      refreshInterval: 20 * 1000, // 30秒ごとに更新
+      refreshInterval: 15 * 1000, // 15秒ごとに更新
       revalidateOnFocus: false,
     }
   )
