@@ -44,6 +44,7 @@ class BusNextArrival:
     trip_dest: str
     remaining: int
     delay: Optional[int] = None
+    current_location: Optional[str] = None  # 現在位置（最寄り停留所名）
 
 
 @dataclass

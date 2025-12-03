@@ -10,6 +10,7 @@ from models.gtfs import (
     GTFSRealtimeData,
     InformedEntityData,
     PositionData,
+    PositionData,
     StopTimeUpdateData,
     TripUpdateData,
     VehiclePositionData,
@@ -207,6 +208,14 @@ class GTFSRealtimeManager:
                             return result
 
         return result
+
+    def get_vehicle_position(self, trip_id: str) -> Optional[PositionData]:
+        """trip_idからバスの現在位置を取得"""
+        data = self.get_data()
+        for vp in data.vehicle_positions:
+            if vp.trip_id == trip_id:
+                return vp.position
+        return None
 
     def bus_realtime_data(
         self, trip_id: str, stop_sequence: Optional[int] = None

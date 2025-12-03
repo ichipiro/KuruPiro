@@ -126,6 +126,41 @@ class GTFSStaticManager:
         except Exception:
             return ""
 
+    @check_expiration
+    def get_all_stops(self) -> pd.DataFrame:
+        """全停留所情報を取得"""
+        if self._stops_df is None or self._stops_df.empty:
+            return pd.DataFrame()
+        return self._stops_df
+
+    @check_expiration
+    def get_trip_stops(self, trip_id: str) -> pd.DataFrame:
+        """指定されたtrip_idの経由停留所を順番に取得"""
+        if self._gtfs_df is None or self._gtfs_df.empty:
+            return pd.DataFrame()
+        
+        df = self._gtfs_df
+        trip_stops = df[df["trip_id"] == trip_id].sort_values("stop_sequence")
+        
+        if trip_stops.empty:
+            return pd.DataFrame()
+        
+        # stops_dfと結合して停留所名と座標を取得
+        # stop_idの形式を合わせる（アンダースコアをスペースに変換）
+        if self._stops_df is not None and not self._stops_df.empty:
+            trip_stops = trip_stops.copy()
+            trip_stops["stop_id_space"] = trip_stops["stop_id"].str.replace("_", " ")
+            trip_stops = pd.merge(
+                trip_stops,
+                self._stops_df[["stop_id", "stop_name", "stop_lat", "stop_lon"]],
+                left_on="stop_id_space",
+                right_on="stop_id",
+                how="left",
+                suffixes=("", "_stops")
+            )
+        
+        return trip_stops[["stop_id", "stop_name", "stop_sequence", "stop_lat", "stop_lon", "arrival_time"]]
+
     def generate_gtfs_data(self) -> None:
         """GTFS静的データの生成"""
         try:

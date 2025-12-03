@@ -31,6 +31,7 @@ def next_bus(
             ),
             "delay": str(bus.delay) + "分遅れ" if bus.delay > 0 else "",
             "trip_dest": bus.trip_dest,
+            "current_location": bus.current_location,
             # "status": bus.status,
         }
         for bus in buses
