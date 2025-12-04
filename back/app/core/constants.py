@@ -3,7 +3,7 @@ GTFS_STATIC_URL = "https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip"
 GTFS_REALTIME_URL = "https://ajt-mobusta-gtfs.mcapps.jp/realtime/8"
 
 # データディレクトリ
-DATA_DIR = "./data/gtfs-static"
+DATA_DIR = "/tmp/data/gtfs-static"
 
 # 曜日マッピング
 WEEKDAY_MAP = {
