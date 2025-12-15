@@ -1,5 +1,5 @@
-import { useRef, useEffect } from 'react';
-import './Bus-card.css';
+import { useRef, useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import BusBadge from "./Bus-badge";
 
 type BusCardProps = {
@@ -26,14 +26,15 @@ export default function BusCard({ busId, destination, via, scheduledTime, delaye
   // viaとcurrentLocationを結合したスクロールテキストを生成
   const scrollText = currentLocation ? `${via}　　　${currentLocation}通過` : via;
 
-  // テキスト更新時にアニメーションを維持するためのref
-  const span1Ref = useRef<HTMLSpanElement>(null);
-  const span2Ref = useRef<HTMLSpanElement>(null);
+  // テキストの幅を測定
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [textWidth, setTextWidth] = useState(0);
 
   useEffect(() => {
-    if (span1Ref.current) span1Ref.current.textContent = scrollText;
-    if (span2Ref.current) span2Ref.current.textContent = scrollText;
-  }, [scrollText]);
+    if (textRef.current && currentLocation) {
+      setTextWidth(textRef.current.offsetWidth);
+    }
+  }, [scrollText, currentLocation]);
 
   return (
     <div className={`relative rounded-[1.3vw] ${isDelayed ? 'bg-[#FFE5E5]' : 'bg-white'} w-[26vw] h-[13vw] px-[2vw] pl-[1.8vw] flex flex-col justify-center overflow-hidden mt-[1vw] mb-[1.5vw]`}>
@@ -49,14 +50,26 @@ export default function BusCard({ busId, destination, via, scheduledTime, delaye
           <div className="flex justify-between items-center mt-[0.5vw] px-[0.4vw]">
             <div className="overflow-hidden flex-1 mr-[0.5vw]">
               {currentLocation ? (
-                <div className="bus-card-marquee-wrapper">
-                  <span ref={span1Ref} className="font-black text-[1.4vw] whitespace-nowrap" style={{ color: themeColor }}>
+                <motion.div
+                  className="inline-flex gap-[3vw]"
+                  animate={{
+                    x: textWidth > 0 ? [0, -(textWidth + 48)] : 0 // 48px = gap分
+                  }}
+                  transition={{
+                    x: {
+                      duration: 12,
+                      repeat: Infinity,
+                      ease: "linear"
+                    }
+                  }}
+                >
+                  <span ref={textRef} className="font-black text-[1.4vw] whitespace-nowrap shrink-0" style={{ color: themeColor }}>
                     {scrollText}
                   </span>
-                  <span ref={span2Ref} className="font-black text-[1.4vw] whitespace-nowrap" style={{ color: themeColor }}>
+                  <span className="font-black text-[1.4vw] whitespace-nowrap shrink-0" style={{ color: themeColor }}>
                     {scrollText}
                   </span>
-                </div>
+                </motion.div>
               ) : (
                 <span className="font-black text-[1.4vw] whitespace-nowrap" style={{ color: themeColor }}>
                   {via}
