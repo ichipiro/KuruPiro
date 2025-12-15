@@ -1,4 +1,5 @@
-import React from 'react';
+import { useRef, useEffect } from 'react';
+import './Bus-card.css';
 import BusBadge from "./Bus-badge";
 
 type BusCardProps = {
@@ -22,16 +23,17 @@ export default function BusCard({ busId, destination, via, scheduledTime, delaye
   // おすすめなら黄色ボーダー
   const barColor = isRecommended ? 'bg-[#FFD06C]' : 'bg-[#B4B4B4]';
 
-  const [showLocation, setShowLocation] = React.useState(false);
+  // viaとcurrentLocationを結合したスクロールテキストを生成
+  const scrollText = currentLocation ? `${via}　　　${currentLocation}通過` : via;
 
-  React.useEffect(() => {
-    if (currentLocation) {
-      const interval = setInterval(() => {
-        setShowLocation(prev => !prev);
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [currentLocation]);
+  // テキスト更新時にアニメーションを維持するためのref
+  const span1Ref = useRef<HTMLSpanElement>(null);
+  const span2Ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (span1Ref.current) span1Ref.current.textContent = scrollText;
+    if (span2Ref.current) span2Ref.current.textContent = scrollText;
+  }, [scrollText]);
 
   return (
     <div className={`relative rounded-[1.3vw] ${isDelayed ? 'bg-[#FFE5E5]' : 'bg-white'} w-[26vw] h-[13vw] px-[2vw] pl-[1.8vw] flex flex-col justify-center overflow-hidden mt-[1vw] mb-[1.5vw]`}>
@@ -44,14 +46,24 @@ export default function BusCard({ busId, destination, via, scheduledTime, delaye
             )}
             <h2 className={`text-[4.5vw] font-semibold ${isDelayed ? 'text-[#FF3535]' : 'text-[#005394]'}`}>{displayTime}</h2>
           </div>
-          <div className="relative">
-            <div className={`flex justify-between items-center mt-[0.5vw] px-[0.4vw] transition-opacity duration-500 ${!currentLocation || !showLocation ? 'opacity-100' : 'opacity-0'}`}>
-              <span className="font-black text-[1.4vw]" style={{ color: themeColor }}>{via}</span>
-              <span className={`font-black text-[1.4vw] ${isUnder5Minutes ? 'text-[#FF3535]' : 'text-[#005394]'}`}>あと{remainingMinutes}分</span>
+          <div className="flex justify-between items-center mt-[0.5vw] px-[0.4vw]">
+            <div className="overflow-hidden flex-1 mr-[0.5vw]">
+              {currentLocation ? (
+                <div className="bus-card-marquee-wrapper">
+                  <span ref={span1Ref} className="font-black text-[1.4vw] whitespace-nowrap" style={{ color: themeColor }}>
+                    {scrollText}
+                  </span>
+                  <span ref={span2Ref} className="font-black text-[1.4vw] whitespace-nowrap" style={{ color: themeColor }}>
+                    {scrollText}
+                  </span>
+                </div>
+              ) : (
+                <span className="font-black text-[1.4vw] whitespace-nowrap" style={{ color: themeColor }}>
+                  {via}
+                </span>
+              )}
             </div>
-            <div className={`absolute top-0 left-0 right-0 mt-[0.5vw] px-[0.4vw] transition-opacity duration-500 ${currentLocation && showLocation ? 'opacity-100' : 'opacity-0'}`}>
-              <span className="font-black text-[1.4vw]" style={{ color: themeColor }}>{currentLocation || '\u00A0'}通過</span>
-            </div>
+            <span className={`font-black text-[1.4vw] whitespace-nowrap ${isUnder5Minutes ? 'text-[#FF3535]' : 'text-[#005394]'}`}>あと{remainingMinutes}分</span>
           </div>
         </div>
       </div>
