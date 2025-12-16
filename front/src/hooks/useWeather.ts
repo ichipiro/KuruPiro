@@ -1,11 +1,11 @@
 import useSWR from 'swr'
 
-import weatherSunny from '../assets/weather_sunny.png'
-import weatherCloudy from '../assets/weather_cloudy.png'
-import weatherRainy from '../assets/weather_rainy.png'
-import weatherSnow from '../assets/weather_snow.png'
-import weatherThunder from '../assets/weather_thunder.png'
-import weatherMoon from '../assets/weather_moon.png'
+import weatherSunny from '../assets/weather_sunny.webp'
+import weatherCloudy from '../assets/weather_cloudy.webp'
+import weatherRainy from '../assets/weather_rainy.webp'
+import weatherSnow from '../assets/weather_snow.webp'
+import weatherThunder from '../assets/weather_thunder.webp'
+import weatherMoon from '../assets/weather_moon.webp'
 
 type WeatherData = {
   temperature: number;

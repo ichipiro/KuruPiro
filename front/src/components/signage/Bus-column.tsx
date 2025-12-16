@@ -1,4 +1,4 @@
-import busIcon from '../../assets/bus.png'
+import busIcon from '../../assets/bus.webp'
 
 type BusColumnProps = {
   stopName: string;

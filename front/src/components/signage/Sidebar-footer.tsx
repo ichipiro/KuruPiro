@@ -1,5 +1,5 @@
-import forSmartphone from '../../assets/for-smartphone.png'
-import qrCode from '../../assets/qr.png'
+import forSmartphone from '../../assets/for-smartphone.webp'
+import qrCode from '../../assets/qr.webp'
 
 export default function SidebarFooter() {
   return (

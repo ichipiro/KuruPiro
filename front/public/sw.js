@@ -8,9 +8,29 @@ function isImageRequest(url) {
   return IMAGE_EXTENSIONS.some(ext => url.pathname.toLowerCase().endsWith(ext));
 }
 
-// インストール時
+// インストール時：/assets/ 配下の画像をプリキャッシュ
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+
+      // ビルド済みアセットのマニフェストを取得してプリキャッシュ
+      try {
+        const response = await fetch('/asset-manifest.json');
+        if (response.ok) {
+          const manifest = await response.json();
+          const imageAssets = manifest.filter(url =>
+            IMAGE_EXTENSIONS.some(ext => url.toLowerCase().endsWith(ext))
+          );
+          await cache.addAll(imageAssets);
+        }
+      } catch (e) {
+        console.log('Precache skipped: manifest not found');
+      }
+
+      self.skipWaiting();
+    })()
+  );
 });
 
 // アクティベート時に古いキャッシュを削除

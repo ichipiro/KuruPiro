@@ -1,4 +1,4 @@
-import adImage from '../../assets/ad-01.png'
+import adImage from '../../assets/ad-01.webp'
 
 export default function SidebarAdvertisement() {
   return (
