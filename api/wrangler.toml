@@ -18,5 +18,14 @@ binding = "DB"
 database_name = "kurupiro-db"
 database_id = "072a7020-ff60-4958-8def-48017c0df486"
 
+[[durable_objects.bindings]]
+name = "REALTIME_CACHE"
+class_name = "RealtimeCache"
+script_name = "kuru-piro-worker"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["RealtimeCache"]
+
 [triggers]
 crons = ["0 3 * * *"]

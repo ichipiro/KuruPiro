@@ -1,124 +1,35 @@
-import Pbf from 'pbf';
-import { Env, RealtimeDelayResult } from './types';
+import { Env, RealtimeDelayResult, CachedRealtimeData } from './types';
 
-interface TripUpdateEntity {
-  tripId?: string;
-  stopTimeUpdates: {
-    stopSequence?: number;
-    stopId?: string;
-    arrivalDelay?: number;
-    arrivalTime?: number;
-    departureDelay?: number;
-    departureTime?: number;
-  }[];
+/**
+ * Get Durable Object instance for realtime cache
+ */
+function getRealtimeCacheStub(env: Env): DurableObjectStub {
+  // Use a fixed ID for the singleton Durable Object
+  const id = env.REALTIME_CACHE.idFromName('realtime-cache');
+  return env.REALTIME_CACHE.get(id);
 }
 
-interface CachedRealtimeData {
-  fetchedAt: number;
-  tripUpdates: TripUpdateEntity[];
-}
-
-let realtimeCache: CachedRealtimeData | null = null;
-
-function readStopTimeUpdate(tag: number, obj: any, pbf: Pbf) {
-  if (tag === 1) obj.stopSequence = pbf.readVarint();
-  else if (tag === 4) obj.stopId = pbf.readString();
-  else if (tag === 2) {
-    // arrival
-    pbf.readMessage((tag2, obj2) => {
-      if (tag2 === 1) obj.arrivalDelay = pbf.readSVarint();
-      else if (tag2 === 2) obj.arrivalTime = pbf.readVarint();
-      else pbf.skip(tag2 & 0x7);
-    }, obj);
-  } else if (tag === 3) {
-    // departure
-    pbf.readMessage((tag2, obj2) => {
-      if (tag2 === 1) obj.departureDelay = pbf.readSVarint();
-      else if (tag2 === 2) obj.departureTime = pbf.readVarint();
-      else pbf.skip(tag2 & 0x7);
-    }, obj);
-  } else {
-    pbf.skip(tag & 0x7);
-  }
-}
-
-function readTripDescriptor(tag: number, obj: any, pbf: Pbf) {
-  if (tag === 1) obj.tripId = pbf.readString();
-  else pbf.skip(tag & 0x7);
-}
-
-function readTripUpdate(tag: number, obj: any, pbf: Pbf) {
-  if (tag === 1) {
-    obj.trip = pbf.readMessage(readTripDescriptor, {});
-  } else if (tag === 2) {
-    if (!obj.stopTimeUpdates) obj.stopTimeUpdates = [];
-    obj.stopTimeUpdates.push(pbf.readMessage(readStopTimeUpdate, {}));
-  } else {
-    pbf.skip(tag & 0x7);
-  }
-}
-
-function readFeedEntity(tag: number, obj: any, pbf: Pbf) {
-  if (tag === 1) obj.id = pbf.readString();
-  else if (tag === 3) obj.tripUpdate = pbf.readMessage(readTripUpdate, {});
-  else pbf.skip(tag & 0x7);
-}
-
-function readFeedMessage(tag: number, obj: any, pbf: Pbf) {
-  if (tag === 2) {
-    if (!obj.entities) obj.entities = [];
-    obj.entities.push(pbf.readMessage(readFeedEntity, {}));
-  } else {
-    pbf.skip(tag & 0x7);
-  }
-}
-
-function decodeTripUpdates(buffer: ArrayBuffer): TripUpdateEntity[] {
-  const pbf = new Pbf(new Uint8Array(buffer));
-  const message: any = pbf.readMessage(readFeedMessage, {});
-
-  const tripUpdates: TripUpdateEntity[] = [];
-  for (const entity of message.entities || []) {
-    if (!entity.tripUpdate?.trip?.tripId) continue;
-
-    tripUpdates.push({
-      tripId: entity.tripUpdate.trip.tripId,
-      stopTimeUpdates: entity.tripUpdate.stopTimeUpdates || [],
-    });
-  }
-  return tripUpdates;
-}
-
-async function fetchRealtimeTripUpdates(env: Env): Promise<TripUpdateEntity[]> {
-  const response = await fetch(`${env.GTFS_REALTIME_URL}/trip_updates.bin`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch realtime data: ${response.status}`);
-  }
-  const buffer = await response.arrayBuffer();
-  return decodeTripUpdates(buffer);
-}
-
-function getCacheTtl(env: Env): number {
-  const override = env.REALTIME_UPDATE_INTERVAL;
-  if (!override) return 15_000;
-  const parsed = Number.parseInt(override, 10);
-  if (Number.isFinite(parsed) && parsed > 0) {
-    return parsed * 1000;
-  }
-  return 15_000;
-}
-
+/**
+ * Fetch realtime data from Durable Object cache
+ */
 async function getRealtimeData(env: Env): Promise<CachedRealtimeData> {
-  const ttl = getCacheTtl(env);
-  if (realtimeCache && Date.now() - realtimeCache.fetchedAt < ttl) {
-    return realtimeCache;
+  const stub = getRealtimeCacheStub(env);
+  const response = await stub.fetch('https://fake-host/data');
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch from Durable Object: ${response.status}`);
   }
-  const updates = await fetchRealtimeTripUpdates(env);
-  realtimeCache = {
-    fetchedAt: Date.now(),
-    tripUpdates: updates,
-  };
-  return realtimeCache;
+
+  const data = await response.json<CachedRealtimeData>();
+  if (!data) {
+    // Return empty data if no cache available yet
+    return {
+      fetchedAt: Date.now(),
+      tripUpdates: [],
+    };
+  }
+
+  return data;
 }
 
 export async function getRealtimeDelay(
@@ -178,6 +89,10 @@ export async function getRealtimeDelay(
   }
 }
 
-export function resetRealtimeCache(): void {
-  realtimeCache = null;
+/**
+ * Force update realtime cache in Durable Object
+ */
+export async function forceUpdateRealtimeCache(env: Env): Promise<void> {
+  const stub = getRealtimeCacheStub(env);
+  await stub.fetch('https://fake-host/update');
 }
