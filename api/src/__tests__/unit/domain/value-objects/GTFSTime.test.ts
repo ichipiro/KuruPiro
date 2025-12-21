@@ -49,6 +49,48 @@ describe('GTFSTime', () => {
     });
   });
 
+  describe('fromComponents', () => {
+    it('時・分・秒からGTFSTimeを生成できる', () => {
+      const time = GTFSTime.fromComponents(14, 30, 0);
+      expect(time.value).toBe('14:30:00');
+    });
+
+    it('24時間超の時刻を生成できる', () => {
+      const time = GTFSTime.fromComponents(25, 30, 0);
+      expect(time.value).toBe('25:30:00');
+    });
+
+    it('0時台の時刻を生成できる', () => {
+      const time = GTFSTime.fromComponents(0, 0, 0);
+      expect(time.value).toBe('00:00:00');
+    });
+
+    it('秒が59の時刻を生成できる', () => {
+      const time = GTFSTime.fromComponents(10, 30, 59);
+      expect(time.value).toBe('10:30:59');
+    });
+
+    it('負の時の場合はエラーをスローする', () => {
+      expect(() => GTFSTime.fromComponents(-1, 0, 0)).toThrow();
+    });
+
+    it('負の分の場合はエラーをスローする', () => {
+      expect(() => GTFSTime.fromComponents(10, -1, 0)).toThrow();
+    });
+
+    it('負の秒の場合はエラーをスローする', () => {
+      expect(() => GTFSTime.fromComponents(10, 30, -1)).toThrow();
+    });
+
+    it('60分以上の場合はエラーをスローする', () => {
+      expect(() => GTFSTime.fromComponents(10, 60, 0)).toThrow();
+    });
+
+    it('60秒以上の場合はエラーをスローする', () => {
+      expect(() => GTFSTime.fromComponents(10, 30, 60)).toThrow();
+    });
+  });
+
   describe('toMinutes', () => {
     it('通常の時刻を分に変換できる', () => {
       const time = GTFSTime.fromString('14:30:00');

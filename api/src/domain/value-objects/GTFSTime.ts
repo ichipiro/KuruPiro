@@ -55,6 +55,34 @@ export class GTFSTime {
   }
 
   /**
+   * 時・分・秒の各要素からGTFSTimeを生成
+   * @param hour - 時（0以上、24時間超も許容）
+   * @param minute - 分（0-59）
+   * @param second - 秒（0-59）
+   * @throws {InvalidGTFSTimeFormatError} 値が不正な場合
+   */
+  static fromComponents(hour: number, minute: number, second: number): GTFSTime {
+    // バリデーション
+    if (minute < 0 || minute >= 60) {
+      throw new InvalidGTFSTimeFormatError(
+        `Invalid minute value: ${minute}. Must be 0-59.`
+      );
+    }
+    if (second < 0 || second >= 60) {
+      throw new InvalidGTFSTimeFormatError(
+        `Invalid second value: ${second}. Must be 0-59.`
+      );
+    }
+    if (hour < 0) {
+      throw new InvalidGTFSTimeFormatError(
+        `Invalid hour value: ${hour}. Must be 0 or greater.`
+      );
+    }
+
+    return new GTFSTime(hour, minute, second);
+  }
+
+  /**
    * 時刻を分単位で返す
    * @returns 時刻を分で表した値（例: 14:30 → 870分）
    */

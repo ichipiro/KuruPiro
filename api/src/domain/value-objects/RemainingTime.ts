@@ -23,9 +23,24 @@ export class RemainingTime {
   }
 
   /**
+   * 秒数から残り時間を生成
+   */
+  static fromSeconds(seconds: number): RemainingTime {
+    const minutes = Math.floor(seconds / 60);
+    return new RemainingTime(minutes); // 負の値も許容（過去の便）
+  }
+
+  /**
    * 残り時間を分単位で取得
    */
   get minutes(): number {
+    return this._minutes;
+  }
+
+  /**
+   * 残り時間を分単位で取得（メソッド形式）
+   */
+  toMinutes(): number {
     return this._minutes;
   }
 
@@ -47,6 +62,13 @@ export class RemainingTime {
       return 'まもなく到着';
     }
     return `あと${this._minutes}分`;
+  }
+
+  /**
+   * 文字列表現を返す（toDisplayStringのエイリアス）
+   */
+  toString(): string {
+    return this.toDisplayString();
   }
 
   /**

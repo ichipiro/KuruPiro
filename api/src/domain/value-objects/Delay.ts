@@ -50,6 +50,13 @@ export class Delay {
   }
 
   /**
+   * 遅延時間を秒単位で取得（メソッド形式）
+   */
+  toSeconds(): number {
+    return this._seconds;
+  }
+
+  /**
    * 表示用の文字列を返す
    * 遅延がない場合は空文字、ある場合は「X分遅れ」
    */
