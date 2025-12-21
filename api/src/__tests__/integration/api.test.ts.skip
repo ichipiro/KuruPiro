@@ -1,0 +1,136 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { unstable_dev } from 'wrangler';
+import type { UnstableDevWorker } from 'wrangler';
+
+/**
+ * 統合テスト: API エンドポイント
+ *
+ * 実際のワーカー環境でエンドポイントをテストします。
+ */
+describe('API Endpoints Integration Tests', () => {
+  let worker: UnstableDevWorker;
+
+  beforeAll(async () => {
+    // Workerを起動
+    worker = await unstable_dev('src/index.ts', {
+      experimental: { disableExperimentalWarning: true },
+    });
+  });
+
+  afterAll(async () => {
+    // Workerを停止
+    await worker.stop();
+  });
+
+  describe('GET /', () => {
+    it('should return health check response', async () => {
+      const response = await worker.fetch('/');
+      expect(response.status).toBe(200);
+
+      const data = await response.json();
+      expect(data).toEqual({ status: 'healthy' });
+    });
+  });
+
+  describe('GET /api/:stop_id/:dest_stop_id', () => {
+    it('should return next buses', async () => {
+      // テスト用の停留所ID（実際のデータに合わせて調整が必要）
+      const originStopId = 'stop_1';
+      const destStopId = 'stop_2';
+
+      const response = await worker.fetch(`/api/${originStopId}/${destStopId}`);
+      expect(response.status).toBe(200);
+
+      const data = await response.json();
+      expect(Array.isArray(data)).toBe(true);
+
+      // レスポンス形式の検証
+      if (data.length > 0) {
+        const item = data[0];
+        expect(item).toHaveProperty('trip_id');
+        expect(item).toHaveProperty('trip_short_id');
+        expect(item).toHaveProperty('arrival_time');
+        expect(item).toHaveProperty('remaining_time');
+        expect(item).toHaveProperty('delay');
+        expect(item).toHaveProperty('trip_dest');
+      }
+    });
+
+    it('should respect response_size parameter', async () => {
+      const originStopId = 'stop_1';
+      const destStopId = 'stop_2';
+
+      const response = await worker.fetch(
+        `/api/${originStopId}/${destStopId}?response_size=3`
+      );
+      expect(response.status).toBe(200);
+
+      const data = await response.json();
+      expect(Array.isArray(data)).toBe(true);
+      // データが存在する場合、最大3件まで
+      if (data.length > 0) {
+        expect(data.length).toBeLessThanOrEqual(3);
+      }
+    });
+
+    it('should handle invalid response_size', async () => {
+      const originStopId = 'stop_1';
+      const destStopId = 'stop_2';
+
+      // 範囲外の値（上限は20）
+      const response = await worker.fetch(
+        `/api/${originStopId}/${destStopId}?response_size=100`
+      );
+      expect(response.status).toBe(200);
+
+      const data = await response.json();
+      expect(Array.isArray(data)).toBe(true);
+      // 最大20件まで制限される
+      expect(data.length).toBeLessThanOrEqual(20);
+    });
+  });
+
+  describe('GET /api/stop/:stop_id/name', () => {
+    it('should return stop name', async () => {
+      const stopId = 'stop_1';
+
+      const response = await worker.fetch(`/api/stop/${stopId}/name`);
+      expect(response.status).toBe(200);
+
+      const data = await response.json();
+      expect(data).toHaveProperty('stop_id');
+      expect(data).toHaveProperty('name');
+      expect(data.stop_id).toBe(stopId);
+    });
+
+    it('should return null for non-existent stop', async () => {
+      const stopId = 'non_existent_stop_999999';
+
+      const response = await worker.fetch(`/api/stop/${stopId}/name`);
+      expect(response.status).toBe(200);
+
+      const data = await response.json();
+      expect(data).toHaveProperty('stop_id');
+      expect(data).toHaveProperty('name');
+      expect(data.stop_id).toBe(stopId);
+      expect(data.name).toBeNull();
+    });
+  });
+
+  describe('CORS Headers', () => {
+    it('should include CORS headers', async () => {
+      const response = await worker.fetch('/', {
+        headers: { Origin: 'https://example.com' },
+      });
+
+      expect(response.headers.has('access-control-allow-origin')).toBe(true);
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle 404 for unknown routes', async () => {
+      const response = await worker.fetch('/unknown-route');
+      expect(response.status).toBe(404);
+    });
+  });
+});
