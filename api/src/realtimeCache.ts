@@ -1,5 +1,5 @@
-import Pbf from 'pbf';
 import { Env, TripUpdateEntity, CachedRealtimeData } from './types';
+import { ProtobufDecoder } from './infrastructure/external/gtfs/ProtobufDecoder';
 
 /**
  * Durable Object that periodically polls GTFS Realtime API
@@ -103,79 +103,14 @@ export class RealtimeCache implements DurableObject {
       throw new Error(`Failed to fetch realtime data: ${response.status}`);
     }
     const buffer = await response.arrayBuffer();
-    return this.decodeTripUpdates(buffer);
-  }
 
-  /**
-   * Decode GTFS Realtime protobuf data
-   */
-  private decodeTripUpdates(buffer: ArrayBuffer): TripUpdateEntity[] {
-    const pbf = new Pbf(new Uint8Array(buffer));
-    const message: any = pbf.readMessage(this.readFeedMessage, {});
+    // Use ProtobufDecoder to decode the data
+    const rawTripUpdates = ProtobufDecoder.decodeTripUpdates(buffer);
 
-    const tripUpdates: TripUpdateEntity[] = [];
-    for (const entity of message.entities || []) {
-      if (!entity.tripUpdate?.trip?.tripId) continue;
-
-      tripUpdates.push({
-        tripId: entity.tripUpdate.trip.tripId,
-        stopTimeUpdates: entity.tripUpdate.stopTimeUpdates || [],
-      });
-    }
-    return tripUpdates;
-  }
-
-  // Protobuf reading functions
-  private readStopTimeUpdate(tag: number, obj: any, pbf: Pbf) {
-    if (tag === 1) obj.stopSequence = pbf.readVarint();
-    else if (tag === 4) obj.stopId = pbf.readString();
-    else if (tag === 2) {
-      // arrival
-      pbf.readMessage((tag2, obj2) => {
-        if (tag2 === 1) obj.arrivalDelay = pbf.readSVarint();
-        else if (tag2 === 2) obj.arrivalTime = pbf.readVarint();
-        else pbf.skip(tag2 & 0x7);
-      }, obj);
-    } else if (tag === 3) {
-      // departure
-      pbf.readMessage((tag2, obj2) => {
-        if (tag2 === 1) obj.departureDelay = pbf.readSVarint();
-        else if (tag2 === 2) obj.departureTime = pbf.readVarint();
-        else pbf.skip(tag2 & 0x7);
-      }, obj);
-    } else {
-      pbf.skip(tag & 0x7);
-    }
-  }
-
-  private readTripDescriptor(tag: number, obj: any, pbf: Pbf) {
-    if (tag === 1) obj.tripId = pbf.readString();
-    else pbf.skip(tag & 0x7);
-  }
-
-  private readTripUpdate(tag: number, obj: any, pbf: Pbf) {
-    if (tag === 1) {
-      obj.trip = pbf.readMessage(this.readTripDescriptor, {});
-    } else if (tag === 2) {
-      if (!obj.stopTimeUpdates) obj.stopTimeUpdates = [];
-      obj.stopTimeUpdates.push(pbf.readMessage(this.readStopTimeUpdate, {}));
-    } else {
-      pbf.skip(tag & 0x7);
-    }
-  }
-
-  private readFeedEntity(tag: number, obj: any, pbf: Pbf) {
-    if (tag === 1) obj.id = pbf.readString();
-    else if (tag === 3) obj.tripUpdate = pbf.readMessage(this.readTripUpdate, {});
-    else pbf.skip(tag & 0x7);
-  }
-
-  private readFeedMessage(tag: number, obj: any, pbf: Pbf) {
-    if (tag === 2) {
-      if (!obj.entities) obj.entities = [];
-      obj.entities.push(pbf.readMessage(this.readFeedEntity, {}));
-    } else {
-      pbf.skip(tag & 0x7);
-    }
+    // Convert to TripUpdateEntity format
+    return rawTripUpdates.map((raw) => ({
+      tripId: raw.tripId,
+      stopTimeUpdates: raw.stopTimeUpdates,
+    }));
   }
 }
