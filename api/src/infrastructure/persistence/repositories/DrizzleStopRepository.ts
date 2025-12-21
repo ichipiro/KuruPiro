@@ -1,0 +1,52 @@
+import { eq } from 'drizzle-orm';
+import { IStopRepository } from '@/domain/repositories/IStopRepository';
+import { Stop } from '@/domain/entities/Stop';
+import { StopId } from '@/domain/value-objects/StopId';
+import { getDBClient } from '@/db/client';
+import { stops } from '@/db/schema';
+import { StopMapper } from '../mappers/StopMapper';
+
+/**
+ * Drizzle ORMを使用したStopリポジトリの実装
+ */
+export class DrizzleStopRepository implements IStopRepository {
+  constructor(private readonly d1: D1Database) {}
+
+  /**
+   * IDで停留所を検索
+   */
+  async findById(id: StopId): Promise<Stop | undefined> {
+    const db = getDBClient(this.d1);
+
+    const result = await db
+      .select()
+      .from(stops)
+      .where(eq(stops.stopId, id.value))
+      .limit(1);
+
+    if (result.length === 0) {
+      return undefined;
+    }
+
+    return StopMapper.toDomain(result[0]);
+  }
+
+  /**
+   * 停留所名で検索
+   */
+  async findNameById(id: StopId): Promise<string> {
+    const stop = await this.findById(id);
+    return stop?.name ?? '';
+  }
+
+  /**
+   * 全ての停留所を取得
+   */
+  async findAll(): Promise<Stop[]> {
+    const db = getDBClient(this.d1);
+
+    const results = await db.select().from(stops);
+
+    return results.map((record) => StopMapper.toDomain(record));
+  }
+}
