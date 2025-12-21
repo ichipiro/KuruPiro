@@ -44,76 +44,82 @@ export class FindNextBusesUseCase {
       return [];
     }
 
-    // 2. 各トリップを NextBusDTO に変換
-    const buses = await Promise.all(
-      tripResults.map(async (tripResult) => {
-        // リアルタイムデータから遅延情報を取得
-        let delay: Delay | undefined;
+    // 2. リアルタイムデータを一括取得してMapに変換（パフォーマンス最適化）
+    let tripUpdateMap: Map<string, any> | undefined;
+    if (this.realtimeRepo) {
+      const allTripUpdates = await this.realtimeRepo.getAllTripUpdates();
+      tripUpdateMap = new Map(
+        allTripUpdates.map((update) => [update.tripId.value, update])
+      );
+    }
 
-        if (this.realtimeRepo) {
-          const tripId = TripId.fromString(tripResult.tripId);
-          const tripUpdate = await this.realtimeRepo.getTripUpdate(tripId);
-
-          if (tripUpdate) {
-            // stopSequenceに対応するStopTimeUpdateを探す
-            const stopTimeUpdate = tripUpdate.findStopTimeUpdate(
-              tripResult.stopSequence
-            );
-
-            if (stopTimeUpdate && stopTimeUpdate.arrivalDelay) {
-              delay = stopTimeUpdate.arrivalDelay;
-            }
-          }
-        }
-
-        // 予定時刻の基準日（currentDateTimeの日付部分）
-        const baseDate = JSTDateTime.fromComponents(
-          currentDateTime.year,
-          currentDateTime.month,
-          currentDateTime.day,
-          0,
-          0,
-          0
-        );
-
-        // 実際の到着時刻を計算
-        const actualArrivalTime = this.timeCalculation.calculateActualArrivalTime(
-          tripResult.arrivalTime,
-          delay,
-          baseDate
-        );
-
-        // 予定到着時刻も計算（遅延なし）
-        const scheduledArrivalTime = this.timeCalculation.calculateActualArrivalTime(
-          tripResult.arrivalTime,
-          undefined,
-          baseDate
-        );
-
-        // 残り時間を計算
-        const remainingTime = this.timeCalculation.calculateRemainingTime(
-          actualArrivalTime,
-          currentDateTime
-        );
-
-        // DTOに変換
-        const dto: NextBusDTO = {
-          scheduledArrival: scheduledArrivalTime.toTimeString(),
-          actualArrival: actualArrivalTime.toTimeString(),
-          remainingTime: remainingTime.toString(),
-          remainingMinutes: remainingTime.toMinutes(),
-          routeShortName: tripResult.routeShortName,
-          destinationLabel: tripResult.destinationLabel,
-          tripId: tripResult.tripId,
-          delaySeconds: delay ? delay.toSeconds() : 0,
-          delayDisplay: delay ? delay.toDisplayString() : '',
-        };
-
-        return dto;
-      })
+    // 3. 基準日を一度だけ計算（パフォーマンス最適化）
+    const baseDate = JSTDateTime.fromComponents(
+      currentDateTime.year,
+      currentDateTime.month,
+      currentDateTime.day,
+      0,
+      0,
+      0
     );
 
-    // 3. 残り時間順にソート
+    // 4. 各トリップを NextBusDTO に変換
+    const buses = tripResults.map((tripResult) => {
+      // リアルタイムデータから遅延情報を取得
+      let delay: Delay | undefined;
+
+      if (tripUpdateMap) {
+        const tripUpdate = tripUpdateMap.get(tripResult.tripId);
+
+        if (tripUpdate) {
+          // stopSequenceに対応するStopTimeUpdateを探す
+          const stopTimeUpdate = tripUpdate.findStopTimeUpdate(
+            tripResult.stopSequence
+          );
+
+          if (stopTimeUpdate && stopTimeUpdate.arrivalDelay) {
+            delay = stopTimeUpdate.arrivalDelay;
+          }
+        }
+      }
+
+      // 実際の到着時刻を計算
+      const actualArrivalTime = this.timeCalculation.calculateActualArrivalTime(
+        tripResult.arrivalTime,
+        delay,
+        baseDate
+      );
+
+      // 予定到着時刻も計算（遅延なし）
+      const scheduledArrivalTime = this.timeCalculation.calculateActualArrivalTime(
+        tripResult.arrivalTime,
+        undefined,
+        baseDate
+      );
+
+      // 残り時間を計算
+      const remainingTime = this.timeCalculation.calculateRemainingTime(
+        actualArrivalTime,
+        currentDateTime
+      );
+
+      // DTOに変換
+      const dto: NextBusDTO = {
+        scheduledArrival: scheduledArrivalTime.toTimeString(),
+        actualArrival: actualArrivalTime.toTimeString(),
+        remainingTime: remainingTime.toString(),
+        remainingMinutes: remainingTime.toMinutes(),
+        routeShortName: tripResult.routeShortName,
+        destinationLabel: tripResult.destinationLabel,
+        tripId: tripResult.tripId,
+        delaySeconds: delay ? delay.toSeconds() : 0,
+        delayDisplay: delay ? delay.toDisplayString() : '',
+      };
+
+      return dto;
+    });
+
+    // 5. 残り時間順にソート
     buses.sort((a, b) => a.remainingMinutes - b.remainingMinutes);
 
     return buses;

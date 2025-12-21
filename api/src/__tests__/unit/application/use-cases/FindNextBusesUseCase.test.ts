@@ -22,7 +22,7 @@ describe('FindNextBusesUseCase', () => {
     mockTimeCalculation = new TimeCalculationService();
 
     mockRealtimeRepo = {
-      getAllTripUpdates: vi.fn(),
+      getAllTripUpdates: vi.fn().mockResolvedValue([]),
       getTripUpdate: vi.fn(),
       getLastUpdatedAt: vi.fn(),
       forceUpdate: vi.fn(),
@@ -110,6 +110,7 @@ describe('FindNextBusesUseCase', () => {
       };
 
       vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
+      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([mockTripUpdate as any]);
       vi.mocked(mockRealtimeRepo.getTripUpdate).mockResolvedValue(mockTripUpdate as any);
 
       useCase = new FindNextBusesUseCase(
@@ -155,6 +156,7 @@ describe('FindNextBusesUseCase', () => {
       ];
 
       vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
+      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([]);
       vi.mocked(mockRealtimeRepo.getTripUpdate).mockResolvedValue(undefined);
 
       useCase = new FindNextBusesUseCase(
