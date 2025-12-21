@@ -187,13 +187,13 @@ async function main() {
   console.log('Processing GTFS data...');
   const sql = generateInsertStatements(files);
 
-  const sqlFile = './database/scripts/temp-import-local.sql';
+  const sqlFile = './scripts/temp-import-local.sql';
   writeFileSync(sqlFile, sql);
   console.log(`Wrote SQL to ${sqlFile}`);
   console.log(`Total statements: ${sql.split('\n').filter(l => l.trim() && !l.startsWith('--')).length}`);
 
   console.log('Uploading to local D1...');
-  const { stdout, stderr } = await execAsync(`npx wrangler d1 execute kurupiro-db --local --file=${sqlFile}`, {
+  const { stdout, stderr } = await execAsync(`cd .. && npx wrangler d1 execute kurupiro-db --local --file=./database/scripts/temp-import-local.sql`, {
     maxBuffer: 50 * 1024 * 1024 // 50MB
   });
   console.log(stdout);

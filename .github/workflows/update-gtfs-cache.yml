@@ -34,4 +34,4 @@ jobs:
           CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
           GTFS_STATIC_URL: 'https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip'
         run: |
-          pnpm --filter database run update:prod
+          cd api/database && pnpm run update:prod

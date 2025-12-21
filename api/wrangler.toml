@@ -5,7 +5,7 @@ account_id = "19fc1347cce15e26c18cd792616f737c"
 
 [vars]
 GTFS_STATIC_URL = "https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip"
-GTFS_REALTIME_URL = "https://ajt-mobusta-gtfs.mcapps.jp/realtime/8"
+GTFS_REALTIME_URL = "https://ajt-mobusta-gtfs.mcapps.jp/realtime/8/trip_updates.bin"
 REALTIME_UPDATE_INTERVAL = "15"
 
 [[kv_namespaces]]
