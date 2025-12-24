@@ -48,6 +48,12 @@ export interface NextBusDTO {
    * 遅延の表示文字列（例: "5分遅れ"、空文字列）
    */
   delayDisplay: string;
+
+  /**
+   * フィードから削除されているかどうか（true = 到着済み）
+   * GTFS Realtimeフィードに該当stopSequenceのStopTimeUpdateが存在しない場合にtrue
+   */
+  isArrivedInFeed: boolean;
 }
 
 /**

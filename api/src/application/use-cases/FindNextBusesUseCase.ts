@@ -68,6 +68,7 @@ export class FindNextBusesUseCase {
       // リアルタイムデータから遅延情報とUnix timestampを取得
       let delay: Delay | undefined;
       let realtimeArrivalTimestamp: number | undefined;
+      let isArrivedInFeed = false; // フィードに存在しない = 到着済み
 
       if (tripUpdateMap) {
         const tripUpdate = tripUpdateMap.get(tripResult.tripId);
@@ -79,6 +80,7 @@ export class FindNextBusesUseCase {
           );
 
           if (stopTimeUpdate) {
+            // StopTimeUpdateが見つかった = まだ到着していない
             // Get representative delay (departure or arrival, whichever is available)
             const representativeDelay = stopTimeUpdate.getRepresentativeDelay();
             if (representativeDelay.hasDelay()) {
@@ -87,6 +89,9 @@ export class FindNextBusesUseCase {
 
             // Unix timestampがあればそれを使う（より正確）
             realtimeArrivalTimestamp = stopTimeUpdate.departureTime || stopTimeUpdate.arrivalTime;
+          } else {
+            // StopTimeUpdateが見つからない = フィードから削除されている = 到着済み
+            isArrivedInFeed = true;
           }
         }
       }
@@ -129,13 +134,19 @@ export class FindNextBusesUseCase {
         tripId: tripResult.tripId,
         delaySeconds: delay ? delay.toSeconds() : 0,
         delayDisplay: delay ? delay.toDisplayString() : '',
+        isArrivedInFeed, // フィードに存在しない = 到着済み
       };
 
       return dto;
     });
 
-    // 5. 既に到着した便を除外（ただし遅延中の便は猶予期間を持たせる）
+    // 5. 既に到着した便を除外
     const upcomingBuses = buses.filter((bus) => {
+      // フィードに存在しない場合は到着済みとして除外
+      if (bus.isArrivedInFeed) {
+        return false;
+      }
+
       // まだ到着していない
       if (bus.remainingMinutes >= 0) {
         return true;
