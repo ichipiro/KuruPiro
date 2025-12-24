@@ -65,8 +65,9 @@ export class FindNextBusesUseCase {
 
     // 4. 各トリップを NextBusDTO に変換
     const buses = tripResults.map((tripResult) => {
-      // リアルタイムデータから遅延情報を取得
+      // リアルタイムデータから遅延情報とUnix timestampを取得
       let delay: Delay | undefined;
+      let realtimeArrivalTimestamp: number | undefined;
 
       if (tripUpdateMap) {
         const tripUpdate = tripUpdateMap.get(tripResult.tripId);
@@ -77,18 +78,32 @@ export class FindNextBusesUseCase {
             tripResult.stopSequence
           );
 
-          if (stopTimeUpdate && stopTimeUpdate.arrivalDelay) {
-            delay = stopTimeUpdate.arrivalDelay;
+          if (stopTimeUpdate) {
+            // Get representative delay (departure or arrival, whichever is available)
+            const representativeDelay = stopTimeUpdate.getRepresentativeDelay();
+            if (representativeDelay.hasDelay()) {
+              delay = representativeDelay;
+            }
+
+            // Unix timestampがあればそれを使う（より正確）
+            realtimeArrivalTimestamp = stopTimeUpdate.departureTime || stopTimeUpdate.arrivalTime;
           }
         }
       }
 
       // 実際の到着時刻を計算
-      const actualArrivalTime = this.timeCalculation.calculateActualArrivalTime(
-        tripResult.arrivalTime,
-        delay,
-        baseDate
-      );
+      let actualArrivalTime: JSTDateTime;
+      if (realtimeArrivalTimestamp && realtimeArrivalTimestamp > 0) {
+        // Unix timestampがあればそれを使う（最も正確）
+        actualArrivalTime = JSTDateTime.fromUnixTimestamp(realtimeArrivalTimestamp);
+      } else {
+        // Unix timestampがなければ従来通りの計算（時刻表 + 遅延）
+        actualArrivalTime = this.timeCalculation.calculateActualArrivalTime(
+          tripResult.arrivalTime,
+          delay,
+          baseDate
+        );
+      }
 
       // 予定到着時刻も計算（遅延なし）
       const scheduledArrivalTime = this.timeCalculation.calculateActualArrivalTime(
@@ -119,9 +134,29 @@ export class FindNextBusesUseCase {
       return dto;
     });
 
-    // 5. 残り時間順にソート
-    buses.sort((a, b) => a.remainingMinutes - b.remainingMinutes);
+    // 5. 既に到着した便を除外（ただし遅延中の便は猶予期間を持たせる）
+    const upcomingBuses = buses.filter((bus) => {
+      // まだ到着していない
+      if (bus.remainingMinutes >= 0) {
+        return true;
+      }
 
-    return buses;
+      // 遅延している便は、計算上過ぎていても3分間は表示し続ける
+      // （リアルタイムデータにUnix timestampがない場合の誤差対応）
+      if (bus.delaySeconds > 0 && bus.remainingMinutes >= -3) {
+        return true;
+      }
+
+      return false; // 到着済み
+    });
+
+    // 6. 残り時間順にソート（猶予期間中の便は0分として扱う）
+    upcomingBuses.sort((a, b) => {
+      const aSort = Math.max(0, a.remainingMinutes);
+      const bSort = Math.max(0, b.remainingMinutes);
+      return aSort - bSort;
+    });
+
+    return upcomingBuses;
   }
 }

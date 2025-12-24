@@ -58,9 +58,11 @@ export class RealtimeCache implements DurableObject {
    */
   private async getCachedData(): Promise<CachedRealtimeData | null> {
     // If no cached data exists, trigger initial update
+    console.log('[RealtimeCache] Getting cached data...');
     const cachedData = await this.state.storage.get<CachedRealtimeData>('realtimeData');
 
     if (!cachedData) {
+      console.log('[RealtimeCache] No cache found, updating...');
       await this.updateRealtimeData();
       // Schedule first alarm
       const currentAlarm = await this.state.storage.getAlarm();
@@ -70,6 +72,7 @@ export class RealtimeCache implements DurableObject {
       return (await this.state.storage.get<CachedRealtimeData>('realtimeData')) ?? null;
     }
 
+    console.log(`[RealtimeCache] Returning cached data with ${cachedData.tripUpdates.length} updates`);
     return cachedData;
   }
 
@@ -98,14 +101,17 @@ export class RealtimeCache implements DurableObject {
    * Fetch trip updates from GTFS Realtime API
    */
   private async fetchRealtimeTripUpdates(): Promise<TripUpdateEntity[]> {
-    const response = await fetch(`${this.env.GTFS_REALTIME_URL}/trip_updates.bin`);
+    console.log(`[RealtimeCache] Fetching from: ${this.env.GTFS_REALTIME_URL}`);
+    const response = await fetch(this.env.GTFS_REALTIME_URL);
     if (!response.ok) {
       throw new Error(`Failed to fetch realtime data: ${response.status}`);
     }
     const buffer = await response.arrayBuffer();
+    console.log(`[RealtimeCache] Downloaded ${buffer.byteLength} bytes`);
 
     // Use ProtobufDecoder to decode the data
     const rawTripUpdates = ProtobufDecoder.decodeTripUpdates(buffer);
+    console.log(`[RealtimeCache] Decoded ${rawTripUpdates.length} trip updates`);
 
     // Convert to TripUpdateEntity format
     return rawTripUpdates.map((raw) => ({

@@ -22,6 +22,11 @@ export class TripFinderService {
   /**
    * 出発地と目的地の間を走るトリップを検索
    *
+   * ハイブリッド戦略：
+   * 1. Realtimeから運行中の便を取得（時刻表上は過ぎているが遅延で実際はまだ来ていない便を含む）
+   * 2. Staticから時刻表ベースの便を取得（最低5件を保証）
+   * 3. 両方をマージしてtripIdで重複除去
+   *
    * @param originStopId 出発地停留所ID
    * @param destinationStopId 目的地停留所ID
    * @param currentDateTime 現在時刻（JST）
@@ -35,23 +40,48 @@ export class TripFinderService {
     // JSTDateTimeからGTFS形式の曜日とGTFS時刻を計算
     const { weekday, gtfsTime } = this.calculateGTFSParams(currentDateTime);
 
-    // リアルタイムリポジトリがある場合はリアルタイム優先検索
-    if (this.realtimeRepo) {
-      return await this.query.findByRealtimeTrips(
-        originStopId,
-        destinationStopId,
-        weekday,
-        gtfsTime
-      );
-    }
-
-    // リアルタイムリポジトリがない場合は静的データ検索
-    return await this.query.findByStopsAndTime(
+    // Staticデータから時刻表ベースの便を取得（最低5件を保証）
+    const staticTrips = await this.query.findByStopsAndTime(
       originStopId,
       destinationStopId,
       weekday,
       gtfsTime
     );
+
+    // Realtimeリポジトリがない場合はstaticのみ返す
+    if (!this.realtimeRepo) {
+      return staticTrips;
+    }
+
+    // Realtimeから運行中の便を取得（遅延で時刻表上は過ぎているが実際はまだ来ていない便を含む）
+    const realtimeTrips = await this.query.findByRealtimeTrips(
+      originStopId,
+      destinationStopId,
+      weekday,
+      gtfsTime
+    );
+
+    // 両方をマージしてtripIdで重複除去
+    const tripMap = new Map<string, TripSearchResult>();
+
+    // Staticの結果を先に追加
+    for (const trip of staticTrips) {
+      tripMap.set(trip.tripId, trip);
+    }
+
+    // Realtimeの結果を追加（既存のものは上書きしない）
+    for (const trip of realtimeTrips) {
+      if (!tripMap.has(trip.tripId)) {
+        tripMap.set(trip.tripId, trip);
+      }
+    }
+
+    // Map から配列に変換して arrivalTime でソート
+    const mergedTrips = Array.from(tripMap.values()).sort((a, b) => {
+      return a.arrivalTime.compareTo(b.arrivalTime);
+    });
+
+    return mergedTrips;
   }
 
   /**

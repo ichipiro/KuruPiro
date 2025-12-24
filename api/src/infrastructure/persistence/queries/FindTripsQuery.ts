@@ -153,27 +153,17 @@ export class FindTripsQuery {
     weekday: number,
     currentTime?: GTFSTime
   ): Promise<TripSearchResult[]> {
+    // リアルタイムリポジトリがない場合は空配列を返す（フォールバックは呼び出し側で制御）
     if (!this.realtimeRepo) {
-      // リアルタイムリポジトリがない場合は従来の静的検索にフォールバック
-      return this.findByStopsAndTime(
-        originStopId,
-        destinationStopId,
-        weekday,
-        currentTime
-      );
+      return [];
     }
 
     // 1. リアルタイムから全TripUpdateを取得
     const tripUpdates = await this.realtimeRepo.getAllTripUpdates();
 
     if (tripUpdates.length === 0) {
-      // リアルタイムデータがない場合は従来の静的検索にフォールバック
-      return this.findByStopsAndTime(
-        originStopId,
-        destinationStopId,
-        weekday,
-        currentTime
-      );
+      // リアルタイムデータがない場合は空配列を返す（フォールバックは呼び出し側で制御）
+      return [];
     }
 
     // 2. 各TripUpdateが出発地・目的地の両方を通過するかチェック
@@ -200,6 +190,7 @@ export class FindTripsQuery {
     }
 
     if (candidateTripIds.length === 0) {
+      // リアルタイムデータから候補が見つからない場合は空配列を返す（フォールバックは呼び出し側で制御）
       return [];
     }
 
@@ -264,11 +255,8 @@ export class FindTripsQuery {
         )
     );
 
-    // WHERE条件を構築
+    // WHERE条件を構築（リアルタイム検索では時刻フィルタなし、遅延便も取得するため）
     const whereConditions = [eq(weekdayColumn, 1)];
-    if (currentTime) {
-      whereConditions.push(gte(originStops.arrivalTime, currentTime.toString()));
-    }
 
     const results = await db
       .with(originStops, destStops)
@@ -295,7 +283,7 @@ export class FindTripsQuery {
       .where(and(...whereConditions))
       .orderBy(originStops.arrivalTime);
 
-    // 結果をドメイン型に変換
+    // 結果をドメイン型に変換（空配列の場合もそのまま返す、フォールバックは呼び出し側で制御）
     return results.map((row) => ({
       tripId: row.tripId,
       arrivalTime: GTFSTime.fromString(row.arrivalTime),

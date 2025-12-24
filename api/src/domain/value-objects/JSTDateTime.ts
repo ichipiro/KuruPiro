@@ -40,6 +40,18 @@ export class JSTDateTime {
   }
 
   /**
+   * Unix timestamp（秒）からJSTDateTimeを生成
+   * @param timestamp - Unix timestamp（秒）
+   */
+  static fromUnixTimestamp(timestamp: number): JSTDateTime {
+    const date = new Date(timestamp * 1000); // ミリ秒に変換
+    if (isNaN(date.getTime())) {
+      throw new InvalidJSTDateTimeError(`Invalid Unix timestamp: ${timestamp}`);
+    }
+    return new JSTDateTime(date);
+  }
+
+  /**
    * 年月日時分秒の各要素からJSTDateTimeを生成
    * @param year - 年
    * @param month - 月（1-12）

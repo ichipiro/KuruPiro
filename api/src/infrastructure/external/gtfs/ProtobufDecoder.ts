@@ -1,4 +1,4 @@
-import Pbf from 'pbf';
+import GtfsRealtimeBindings from 'gtfs-realtime-bindings';
 
 /**
  * GTFS Realtime Protobuf形式のStopTimeUpdate
@@ -31,75 +31,43 @@ export class ProtobufDecoder {
    * GTFS Realtime Protobufバッファをデコード
    */
   static decodeTripUpdates(buffer: ArrayBuffer): RawTripUpdate[] {
-    const pbf = new Pbf(new Uint8Array(buffer));
-    const message: any = pbf.readMessage(this.readFeedMessage, {});
+    // Use official GTFS Realtime bindings to decode
+    const feed = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(
+      new Uint8Array(buffer)
+    );
+
+    console.log(`[ProtobufDecoder] Parsed feed with ${feed.entity.length} entities`);
 
     const tripUpdates: RawTripUpdate[] = [];
-    for (const entity of message.entities || []) {
-      if (!entity.tripUpdate?.trip?.tripId) continue;
+    for (const entity of feed.entity) {
+      if (!entity.tripUpdate?.trip?.tripId) {
+        continue;
+      }
+
+
+      // Map stopTimeUpdate to our format
+      const stopTimeUpdates: RawStopTimeUpdate[] = (entity.tripUpdate.stopTimeUpdate || []).map(stu => {
+        const arrivalDelay = stu.arrival?.delay ?? undefined;
+        const departureDelay = stu.departure?.delay ?? undefined;
+
+        return {
+          stopSequence: stu.stopSequence ?? undefined,
+          // Fix GTFS spec violation: normalize stop_id by replacing spaces with underscores
+          stopId: stu.stopId ? stu.stopId.replace(/ /g, '_') : undefined,
+          arrivalDelay,
+          arrivalTime: typeof stu.arrival?.time === 'object' && stu.arrival?.time?.toNumber ? stu.arrival.time.toNumber() : (stu.arrival?.time as number) ?? undefined,
+          departureDelay,
+          departureTime: typeof stu.departure?.time === 'object' && stu.departure?.time?.toNumber ? stu.departure.time.toNumber() : (stu.departure?.time as number) ?? undefined,
+        };
+      });
 
       tripUpdates.push({
         tripId: entity.tripUpdate.trip.tripId,
-        stopTimeUpdates: entity.tripUpdate.stopTimeUpdates || [],
+        stopTimeUpdates,
       });
     }
+
+    console.log(`[ProtobufDecoder] Extracted ${tripUpdates.length} trip updates`);
     return tripUpdates;
-  }
-
-  // Protobuf reading functions
-  private static readStopTimeUpdate(tag: number, obj: any, pbf: Pbf) {
-    if (tag === 1) obj.stopSequence = pbf.readVarint();
-    else if (tag === 4) obj.stopId = pbf.readString();
-    else if (tag === 2) {
-      // arrival
-      pbf.readMessage((tag2, obj2) => {
-        if (tag2 === 1) obj.arrivalDelay = pbf.readSVarint();
-        else if (tag2 === 2) obj.arrivalTime = pbf.readVarint();
-        else pbf.skip(tag2 & 0x7);
-      }, obj);
-    } else if (tag === 3) {
-      // departure
-      pbf.readMessage((tag2, obj2) => {
-        if (tag2 === 1) obj.departureDelay = pbf.readSVarint();
-        else if (tag2 === 2) obj.departureTime = pbf.readVarint();
-        else pbf.skip(tag2 & 0x7);
-      }, obj);
-    } else {
-      pbf.skip(tag & 0x7);
-    }
-  }
-
-  private static readTripDescriptor(tag: number, obj: any, pbf: Pbf) {
-    if (tag === 1) obj.tripId = pbf.readString();
-    else pbf.skip(tag & 0x7);
-  }
-
-  private static readTripUpdate(tag: number, obj: any, pbf: Pbf) {
-    if (tag === 1) {
-      obj.trip = pbf.readMessage(ProtobufDecoder.readTripDescriptor, {});
-    } else if (tag === 2) {
-      if (!obj.stopTimeUpdates) obj.stopTimeUpdates = [];
-      obj.stopTimeUpdates.push(
-        pbf.readMessage(ProtobufDecoder.readStopTimeUpdate, {})
-      );
-    } else {
-      pbf.skip(tag & 0x7);
-    }
-  }
-
-  private static readFeedEntity(tag: number, obj: any, pbf: Pbf) {
-    if (tag === 1) obj.id = pbf.readString();
-    else if (tag === 3)
-      obj.tripUpdate = pbf.readMessage(ProtobufDecoder.readTripUpdate, {});
-    else pbf.skip(tag & 0x7);
-  }
-
-  private static readFeedMessage(tag: number, obj: any, pbf: Pbf) {
-    if (tag === 2) {
-      if (!obj.entities) obj.entities = [];
-      obj.entities.push(pbf.readMessage(ProtobufDecoder.readFeedEntity, {}));
-    } else {
-      pbf.skip(tag & 0x7);
-    }
   }
 }

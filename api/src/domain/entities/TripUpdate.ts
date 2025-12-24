@@ -10,7 +10,9 @@ export class StopTimeUpdate {
     private readonly _stopSequence: number | undefined,
     private readonly _stopId: StopId | undefined,
     private readonly _arrivalDelay: Delay | undefined,
-    private readonly _departureDelay: Delay | undefined
+    private readonly _departureDelay: Delay | undefined,
+    private readonly _arrivalTime: number | undefined,
+    private readonly _departureTime: number | undefined
   ) {}
 
   static create(params: {
@@ -18,12 +20,16 @@ export class StopTimeUpdate {
     stopId?: StopId;
     arrivalDelay?: Delay;
     departureDelay?: Delay;
+    arrivalTime?: number;
+    departureTime?: number;
   }): StopTimeUpdate {
     return new StopTimeUpdate(
       params.stopSequence,
       params.stopId,
       params.arrivalDelay,
-      params.departureDelay
+      params.departureDelay,
+      params.arrivalTime,
+      params.departureTime
     );
   }
 
@@ -41,6 +47,14 @@ export class StopTimeUpdate {
 
   get departureDelay(): Delay | undefined {
     return this._departureDelay;
+  }
+
+  get arrivalTime(): number | undefined {
+    return this._arrivalTime;
+  }
+
+  get departureTime(): number | undefined {
+    return this._departureTime;
   }
 
   /**
