@@ -41,6 +41,7 @@ describe('TripFinderService', () => {
 
   describe('findTrips', () => {
     it('should call findByRealtimeTrips when realtimeRepo is provided', async () => {
+      vi.mocked(mockQuery.findByStopsAndTime).mockResolvedValue([]);
       vi.mocked(mockQuery.findByRealtimeTrips).mockResolvedValue(mockTripResults);
 
       service = new TripFinderService(mockQuery, mockRealtimeRepo);
@@ -61,7 +62,12 @@ describe('TripFinderService', () => {
         0, // Monday
         GTFSTime.fromString('10:00:00')
       );
-      expect(mockQuery.findByStopsAndTime).not.toHaveBeenCalled();
+      expect(mockQuery.findByStopsAndTime).toHaveBeenCalledWith(
+        originStopId,
+        destinationStopId,
+        0, // Monday
+        GTFSTime.fromString('10:00:00')
+      );
       expect(results).toEqual(mockTripResults);
     });
 
@@ -110,6 +116,7 @@ describe('TripFinderService', () => {
     });
 
     it('should handle late-night times (25:30:00 for 01:30 next day)', async () => {
+      vi.mocked(mockQuery.findByStopsAndTime).mockResolvedValue([]);
       vi.mocked(mockQuery.findByRealtimeTrips).mockResolvedValue([]);
 
       service = new TripFinderService(mockQuery, mockRealtimeRepo);
@@ -124,6 +131,12 @@ describe('TripFinderService', () => {
       // Weekday should be Monday (1), not Tuesday (2)
       // Time should be 25:30:00
       expect(mockQuery.findByRealtimeTrips).toHaveBeenCalledWith(
+        originStopId,
+        destinationStopId,
+        0, // Monday (because it's considered late Monday night)
+        GTFSTime.fromString('25:30:00')
+      );
+      expect(mockQuery.findByStopsAndTime).toHaveBeenCalledWith(
         originStopId,
         destinationStopId,
         0, // Monday (because it's considered late Monday night)
