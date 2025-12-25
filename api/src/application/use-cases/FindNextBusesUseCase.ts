@@ -2,7 +2,7 @@ import { StopId, Delay, TripId } from '@/domain/value-objects/identifiers';
 import { JSTDateTime } from '@/domain/value-objects/time';
 import { TripFinderService } from '@/domain/services/TripFinderService';
 import { TimeCalculationService } from '@/domain/services/TimeCalculationService';
-import type { IRealtimeRepository, IStopRepository } from '@/domain/repositories';
+import type { IRealtimeRepository, IStopRepository, IStopTimeRepository } from '@/domain/repositories';
 import type { NextBusDTO } from '@/application/dto/NextBusDTO';
 
 /**
@@ -16,6 +16,7 @@ export class FindNextBusesUseCase {
     private readonly tripFinder: TripFinderService,
     private readonly timeCalculation: TimeCalculationService,
     private readonly stopRepo: IStopRepository,
+    private readonly stopTimeRepo: IStopTimeRepository,
     private readonly realtimeRepo?: IRealtimeRepository
   ) {}
 
@@ -25,12 +26,14 @@ export class FindNextBusesUseCase {
    * @param originStopId 出発地停留所ID
    * @param destinationStopId 目的地停留所ID
    * @param currentDateTime 現在時刻（JST）
+   * @param viaStopIds 経由地停留所IDの配列（オプション）
    * @returns 次のバス情報のリスト（残り時間順にソート）
    */
   async execute(
     originStopId: StopId,
     destinationStopId: StopId,
-    currentDateTime: JSTDateTime
+    currentDateTime: JSTDateTime,
+    viaStopIds?: StopId[]
   ): Promise<NextBusDTO[]> {
     // 1. トリップを検索
     const tripResults = await this.tripFinder.findTrips(
@@ -41,6 +44,21 @@ export class FindNextBusesUseCase {
 
     if (tripResults.length === 0) {
       return [];
+    }
+
+    // 1.5. 経由地が指定されている場合、経由地を通過するトリップのみにフィルタリング
+    let filteredTripResults = tripResults;
+    if (viaStopIds && viaStopIds.length > 0) {
+      filteredTripResults = await this.filterByViaStops(
+        tripResults,
+        originStopId,
+        viaStopIds,
+        destinationStopId
+      );
+
+      if (filteredTripResults.length === 0) {
+        return [];
+      }
     }
 
     // 2. リアルタイムデータを一括取得してMapに変換（パフォーマンス最適化）
@@ -63,7 +81,7 @@ export class FindNextBusesUseCase {
     );
 
     // 4. 各トリップを NextBusDTO に変換
-    const buses = await Promise.all(tripResults.map(async (tripResult) => {
+    const buses = await Promise.all(filteredTripResults.map(async (tripResult) => {
       // リアルタイムデータから遅延情報とUnix timestampを取得
       let delay: Delay | undefined;
       let realtimeArrivalTimestamp: number | undefined;
@@ -179,5 +197,69 @@ export class FindNextBusesUseCase {
     });
 
     return upcomingBuses;
+  }
+
+  /**
+   * 経由地を通過するトリップのみにフィルタリング
+   *
+   * @param tripResults トリップ検索結果
+   * @param originStopId 出発地
+   * @param viaStopIds 経由地（順番を保持）
+   * @param destinationStopId 目的地
+   * @returns origin → via1 → via2 → ... → destination の順で通過するトリップのみ
+   */
+  private async filterByViaStops(
+    tripResults: any[],
+    originStopId: StopId,
+    viaStopIds: StopId[],
+    destinationStopId: StopId
+  ): Promise<any[]> {
+    const validTrips: any[] = [];
+
+    for (const tripResult of tripResults) {
+      const tripId = TripId.fromString(tripResult.tripId);
+
+      // トリップの全停車地を取得
+      const stopTimes = await this.stopTimeRepo.findByTripId(tripId);
+
+      if (stopTimes.length === 0) {
+        continue;
+      }
+
+      // 各停留所のstop_sequenceを取得
+      const stopSequenceMap = new Map<string, number>();
+      for (const stopTime of stopTimes) {
+        stopSequenceMap.set(stopTime.stopId.value, stopTime.sequence);
+      }
+
+      // origin, via1, via2, ..., destination の順番をチェック
+      const requiredStops = [originStopId, ...viaStopIds, destinationStopId];
+      let previousSequence = -1;
+      let isValid = true;
+
+      for (const requiredStop of requiredStops) {
+        const sequence = stopSequenceMap.get(requiredStop.value);
+
+        if (sequence === undefined) {
+          // 必要な停留所を通過していない
+          isValid = false;
+          break;
+        }
+
+        if (sequence <= previousSequence) {
+          // 順番が正しくない
+          isValid = false;
+          break;
+        }
+
+        previousSequence = sequence;
+      }
+
+      if (isValid) {
+        validTrips.push(tripResult);
+      }
+    }
+
+    return validTrips;
   }
 }

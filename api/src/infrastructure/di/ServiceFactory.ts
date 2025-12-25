@@ -131,6 +131,7 @@ export class ServiceFactory {
       this.getTripFinderService(),
       this.getTimeCalculationService(),
       this.getStopRepository(),
+      this.getStopTimeRepository(),
       this.getRealtimeRepository()
     );
   }

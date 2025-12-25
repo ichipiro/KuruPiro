@@ -33,13 +33,14 @@ interface NextBusResponseItem {
 export class BusController {
   /**
    * 次のバスを取得（新API）
-   * GET /api/trips?origin=STOP_A&destination=STOP_B&limit=5
+   * GET /api/trips?origin=STOP_A&destination=STOP_B&via=STOP_C,STOP_D&limit=5
    */
   static async getTrips(c: Context): Promise<Response> {
     try {
       // クエリパラメータ取得
       const originId = c.req.query('origin');
       const destinationId = c.req.query('destination');
+      const viaParam = c.req.query('via');
       const limitParam = c.req.query('limit') ?? '5';
       const limit = Number.parseInt(limitParam, 10);
 
@@ -60,11 +61,21 @@ export class BusController {
       const destinationStopId = StopId.fromString(destinationId);
       const currentDateTime = JSTDateTime.now();
 
+      // 経由地をパース（カンマ区切り）
+      let viaStopIds: StopId[] | undefined;
+      if (viaParam && viaParam.trim().length > 0) {
+        const viaStopIdStrings = viaParam.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        if (viaStopIdStrings.length > 0) {
+          viaStopIds = viaStopIdStrings.map(id => StopId.fromString(id));
+        }
+      }
+
       // ユースケース実行
       const buses = await useCase.execute(
         originStopId,
         destinationStopId,
-        currentDateTime
+        currentDateTime,
+        viaStopIds
       );
 
       // レスポンスサイズで制限

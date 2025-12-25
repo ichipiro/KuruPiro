@@ -91,6 +91,7 @@ Host: your-worker.your-subdomain.workers.dev
 |----------|-----|------|----------|------|------|
 | origin | string | ✓ | - | - | 出発地の停留所ID |
 | destination | string | ✓ | - | - | 目的地の停留所ID |
+| via | string | - | - | - | 経由地の停留所ID（カンマ区切りで複数指定可能）|
 | limit | integer | - | 5 | 1-20 | 返却する結果の最大件数 |
 
 ### レスポンス
@@ -165,15 +166,27 @@ curl "https://your-worker.your-subdomain.workers.dev/api/trips?origin=stop_001&d
 curl "https://your-worker.your-subdomain.workers.dev/api/trips?origin=stop_001&destination=stop_010&limit=10"
 ```
 
+#### 経由地を指定
+
+```bash
+curl "https://your-worker.your-subdomain.workers.dev/api/trips?origin=stop_001&destination=stop_010&via=stop_005,stop_007"
+```
+
 #### JavaScriptでの使用
 
 ```javascript
-const fetchNextBuses = async (originStopId, destStopId, limit = 5) => {
+const fetchNextBuses = async (originStopId, destStopId, limit = 5, viaStopIds = []) => {
   const params = new URLSearchParams({
     origin: originStopId,
     destination: destStopId,
     limit: limit.toString()
   });
+
+  // 経由地を追加（カンマ区切り）
+  if (viaStopIds.length > 0) {
+    params.append('via', viaStopIds.join(','));
+  }
+
   const url = `https://your-worker.your-subdomain.workers.dev/api/trips?${params}`;
 
   try {
@@ -191,8 +204,16 @@ const fetchNextBuses = async (originStopId, destStopId, limit = 5) => {
   }
 };
 
-// 使用例
+// 使用例1: 基本
 fetchNextBuses('stop_001', 'stop_010', 10)
+  .then(buses => {
+    buses.forEach(bus => {
+      console.log(`路線${bus.trip_short_id}: ${bus.arrival_time} (${bus.remaining_time}) ${bus.delay}`);
+    });
+  });
+
+// 使用例2: 経由地指定
+fetchNextBuses('stop_001', 'stop_010', 10, ['stop_005', 'stop_007'])
   .then(buses => {
     buses.forEach(bus => {
       console.log(`路線${bus.trip_short_id}: ${bus.arrival_time} (${bus.remaining_time}) ${bus.delay}`);
@@ -207,6 +228,7 @@ fetchNextBuses('stop_001', 'stop_010', 10)
 - リアルタイムデータは15分ごとに更新されます
 - GTFS仕様に従い、24時間を超える時刻（例: 25:30）も扱えます（翌日の1:30を意味）
 - 該当するバスが見つからない場合、空の配列`[]`が返されます
+- `via`パラメータを指定すると、origin → via1 → via2 → ... → destinationの順で停車するバスのみが返されます
 
 ---
 

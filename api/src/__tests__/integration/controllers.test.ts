@@ -150,6 +150,20 @@ describe('Controllers Integration Tests', () => {
         expect(data).toHaveProperty('error');
         expect(data.error).toBe('origin and destination are required');
       });
+
+      it('should handle via parameter', async () => {
+        app.get('/api/trips', async (c) => {
+          c.set('factory', mockFactory);
+          return await BusController.getTrips(c);
+        });
+
+        const response = await app.request('/api/trips?origin=origin&destination=dest&via=via1,via2');
+        expect(response.status).toBe(200);
+
+        // viaパラメータがあってもリクエストは成功する
+        const data = (await response.json()) as any[];
+        expect(Array.isArray(data)).toBe(true);
+      });
     });
 
     describe('getNextBuses (old API)', () => {

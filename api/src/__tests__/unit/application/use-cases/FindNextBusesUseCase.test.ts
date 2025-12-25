@@ -5,7 +5,7 @@ import { TimeCalculationService } from '@/domain/services/TimeCalculationService
 import { StopId } from '@/domain/value-objects/identifiers';
 import { JSTDateTime } from '@/domain/value-objects/time';
 import { GTFSTime } from '@/domain/value-objects/time';
-import type { IRealtimeRepository, IStopRepository } from '@/domain/repositories';
+import type { IRealtimeRepository, IStopRepository, IStopTimeRepository } from '@/domain/repositories';
 import type { TripSearchResult } from '@/infrastructure/persistence/queries/FindTripsQuery';
 
 describe('FindNextBusesUseCase', () => {
@@ -13,6 +13,7 @@ describe('FindNextBusesUseCase', () => {
   let mockTripFinder: TripFinderService;
   let mockTimeCalculation: TimeCalculationService;
   let mockStopRepo: IStopRepository;
+  let mockStopTimeRepo: IStopTimeRepository;
   let mockRealtimeRepo: IRealtimeRepository;
 
   beforeEach(() => {
@@ -27,6 +28,12 @@ describe('FindNextBusesUseCase', () => {
       findNameById: vi.fn().mockResolvedValue('テスト停留所'),
       findAll: vi.fn(),
     } as unknown as IStopRepository;
+
+    mockStopTimeRepo = {
+      findByTripId: vi.fn().mockResolvedValue([]),
+      findByStopId: vi.fn(),
+      findByTripAndStop: vi.fn(),
+    } as unknown as IStopTimeRepository;
 
     mockRealtimeRepo = {
       getAllTripUpdates: vi.fn().mockResolvedValue([]),
@@ -57,6 +64,7 @@ describe('FindNextBusesUseCase', () => {
         mockTripFinder,
         mockTimeCalculation,
         mockStopRepo,
+        mockStopTimeRepo,
         mockRealtimeRepo
       );
 
@@ -136,6 +144,7 @@ describe('FindNextBusesUseCase', () => {
         mockTripFinder,
         mockTimeCalculation,
         mockStopRepo,
+        mockStopTimeRepo,
         mockRealtimeRepo
       );
 
@@ -183,6 +192,7 @@ describe('FindNextBusesUseCase', () => {
         mockTripFinder,
         mockTimeCalculation,
         mockStopRepo,
+        mockStopTimeRepo,
         mockRealtimeRepo
       );
 
@@ -207,6 +217,7 @@ describe('FindNextBusesUseCase', () => {
         mockTripFinder,
         mockTimeCalculation,
         mockStopRepo,
+        mockStopTimeRepo,
         mockRealtimeRepo
       );
 
@@ -237,7 +248,8 @@ describe('FindNextBusesUseCase', () => {
       useCase = new FindNextBusesUseCase(
         mockTripFinder,
         mockTimeCalculation,
-        mockStopRepo
+        mockStopRepo,
+        mockStopTimeRepo
         // No realtime repo
       );
 
