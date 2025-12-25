@@ -17,25 +17,11 @@ http://localhost:8787
 
 ## エンドポイント一覧
 
-### 新API（推奨）
-
-| メソッド | パス | 説明 |
-|---------|------|------|
-| GET | `/api/trips` | 次のバスを検索（クエリパラメータ版） |
-| GET | `/api/stops/:stop_id` | 停留所情報を取得 |
-
-### 旧API（後方互換性のため維持）
-
-| メソッド | パス | 説明 |
-|---------|------|------|
-| GET | `/api/:stop_id/:dest_stop_id` | 次のバスを検索（パスパラメータ版） |
-| GET | `/api/stop/:stop_id/name` | 停留所名を取得 |
-
-### その他
-
 | メソッド | パス | 説明 |
 |---------|------|------|
 | GET | `/` | ヘルスチェック |
+| GET | `/api/trips` | 次のバスを検索 |
+| GET | `/api/stops/:stop_id` | 停留所情報を取得 |
 
 ---
 
@@ -74,7 +60,7 @@ curl https://your-worker.your-subdomain.workers.dev/
 
 ---
 
-## 2. 次のバスを検索（新API）
+## 2. 次のバスを検索
 
 出発地と目的地を指定して、次に利用可能なバスを検索します。リアルタイムの遅延情報も含まれます。
 
@@ -232,7 +218,7 @@ fetchNextBuses('stop_001', 'stop_010', 10, ['stop_005', 'stop_007'])
 
 ---
 
-## 3. 停留所情報を取得（新API）
+## 3. 停留所情報を取得
 
 停留所IDから停留所の情報を取得します。
 
@@ -401,64 +387,3 @@ APIのバージョニングは、将来的にパスに含める予定です（�
 ## サポート
 
 問題や質問がある場合は、GitHubリポジトリのIssuesセクションで報告してください。
-
----
-
-# 旧API（非推奨 - 後方互換性のため維持）
-
-以下のエンドポイントは後方互換性のために維持されていますが、新規開発では新APIの使用を推奨します。
-
-## 旧1. 次のバスを検索（パスパラメータ版）
-
-### リクエスト
-
-```http
-GET /api/:stop_id/:dest_stop_id?response_size=5 HTTP/1.1
-Host: your-worker.your-subdomain.workers.dev
-```
-
-### パスパラメータ
-
-| パラメータ | 型 | 必須 | 説明 |
-|----------|-----|------|------|
-| stop_id | string | ✓ | 出発地の停留所ID |
-| dest_stop_id | string | ✓ | 目的地の停留所ID |
-
-### クエリパラメータ
-
-| パラメータ | 型 | 必須 | デフォルト | 範囲 | 説明 |
-|----------|-----|------|----------|------|------|
-| response_size | integer | - | 5 | 1-20 | 返却する結果の最大件数 |
-
-### 使用例
-
-```bash
-curl "https://your-worker.your-subdomain.workers.dev/api/stop_001/stop_010?response_size=10"
-```
-
-**移行先:** `GET /api/trips?origin=stop_001&destination=stop_010&limit=10`
-
----
-
-## 旧2. 停留所名を取得
-
-### リクエスト
-
-```http
-GET /api/stop/:stop_id/name HTTP/1.1
-Host: your-worker.your-subdomain.workers.dev
-```
-
-### パスパラメータ
-
-| パラメータ | 型 | 必須 | 説明 |
-|----------|-----|------|------|
-| stop_id | string | ✓ | 停留所ID |
-
-### 使用例
-
-```bash
-curl "https://your-worker.your-subdomain.workers.dev/api/stop/stop_001/name"
-```
-
-**移行先:** `GET /api/stops/stop_001`

@@ -104,18 +104,8 @@ app.get('/api/debug/realtime/:trip_id', async (c) => {
   }
 });
 
-// 新API: バス情報検索（クエリパラメータ版）
 app.get('/api/trips', BusController.getTrips);
-
-// 新API: 停留所情報取得（全情報）
 app.get('/api/stops/:stop_id', StopController.getStopInfo);
-
-// 旧API: 停留所名取得（後方互換性のため維持）
-app.get('/api/stop/:stop_id/name', StopController.getStopName);
-
-// 旧API: バス情報検索（パスパラメータ版 - 後方互換性のため維持）
-// ワイルドカードは最後に定義
-app.get('/api/:stop_id/:dest_stop_id', BusController.getNextBuses);
 
 // グローバルエラーハンドラー
 app.onError((err, c) => {
