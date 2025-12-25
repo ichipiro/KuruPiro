@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { StopId } from '@/domain/value-objects/StopId';
+import { StopId } from '@/domain/value-objects/identifiers';
 
 describe('StopId', () => {
   describe('fromString', () => {

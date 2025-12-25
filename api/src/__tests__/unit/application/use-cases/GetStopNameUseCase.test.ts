@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GetStopNameUseCase } from '@/application/use-cases/GetStopNameUseCase';
-import { StopId } from '@/domain/value-objects/StopId';
+import { StopId } from '@/domain/value-objects/identifiers';
 import { Stop } from '@/domain/entities/Stop';
-import type { IStopRepository } from '@/domain/repositories/IStopRepository';
+import type { IStopRepository } from '@/domain/repositories';
 
 describe('GetStopNameUseCase', () => {
   let useCase: GetStopNameUseCase;

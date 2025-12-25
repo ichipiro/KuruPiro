@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm';
-import { ITripRepository } from '@/domain/repositories/ITripRepository';
+import { ITripRepository } from '@/domain/repositories';
 import { Trip } from '@/domain/entities/Trip';
-import { TripId } from '@/domain/value-objects/TripId';
+import { TripId } from '@/domain/value-objects/identifiers';
 import { getDBClient } from '@/db/client';
 import { trips } from '@/db/schema';
-import { TripMapper } from '../mappers/TripMapper';
+import { TripMapper } from '../mappers';
 
 /**
  * Drizzle ORMを使用したTripリポジトリの実装

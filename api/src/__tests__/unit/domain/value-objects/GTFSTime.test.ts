@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { GTFSTime } from '@/domain/value-objects/GTFSTime';
+import { GTFSTime } from '@/domain/value-objects/time';
 
 describe('GTFSTime', () => {
   describe('fromString', () => {

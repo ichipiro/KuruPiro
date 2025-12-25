@@ -1,7 +1,5 @@
-import { GTFSTime } from '@/domain/value-objects/GTFSTime';
-import { JSTDateTime } from '@/domain/value-objects/JSTDateTime';
-import { Delay } from '@/domain/value-objects/Delay';
-import { RemainingTime } from '@/domain/value-objects/RemainingTime';
+import { GTFSTime, JSTDateTime } from '@/domain/value-objects/time';
+import { Delay, RemainingTime } from '@/domain/value-objects/identifiers';
 
 /**
  * 時刻計算のドメインサービス

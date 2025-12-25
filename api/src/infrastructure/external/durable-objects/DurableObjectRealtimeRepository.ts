@@ -1,8 +1,6 @@
-import { IRealtimeRepository } from '@/domain/repositories/IRealtimeRepository';
+import { IRealtimeRepository } from '@/domain/repositories';
 import { TripUpdate, StopTimeUpdate } from '@/domain/entities/TripUpdate';
-import { TripId } from '@/domain/value-objects/TripId';
-import { StopId } from '@/domain/value-objects/StopId';
-import { Delay } from '@/domain/value-objects/Delay';
+import { TripId, StopId, Delay } from '@/domain/value-objects/identifiers';
 import { Env, CachedRealtimeData } from '@/types';
 
 /**

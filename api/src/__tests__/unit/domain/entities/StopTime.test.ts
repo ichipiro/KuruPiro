@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { StopTime } from '@/domain/entities/StopTime';
-import { TripId } from '@/domain/value-objects/TripId';
-import { StopId } from '@/domain/value-objects/StopId';
-import { GTFSTime } from '@/domain/value-objects/GTFSTime';
+import { TripId, StopId } from '@/domain/value-objects/identifiers';
+import { GTFSTime } from '@/domain/value-objects/time';
 
 describe('StopTime', () => {
   describe('create', () => {

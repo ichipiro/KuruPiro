@@ -1,6 +1,4 @@
-import { TripId } from '../value-objects/TripId';
-import { StopId } from '../value-objects/StopId';
-import { Delay } from '../value-objects/Delay';
+import { TripId, StopId, Delay } from '../value-objects/identifiers';
 
 /**
  * 停留所の遅延情報を表す値オブジェクト

@@ -1,11 +1,10 @@
 import { eq, and, asc } from 'drizzle-orm';
-import { IStopTimeRepository } from '@/domain/repositories/IStopTimeRepository';
+import { IStopTimeRepository } from '@/domain/repositories';
 import { StopTime } from '@/domain/entities/StopTime';
-import { TripId } from '@/domain/value-objects/TripId';
-import { StopId } from '@/domain/value-objects/StopId';
+import { TripId, StopId } from '@/domain/value-objects/identifiers';
 import { getDBClient } from '@/db/client';
 import { stopTimes } from '@/db/schema';
-import { StopTimeMapper } from '../mappers/StopTimeMapper';
+import { StopTimeMapper } from '../mappers';
 
 /**
  * Drizzle ORMを使用したStopTimeリポジトリの実装

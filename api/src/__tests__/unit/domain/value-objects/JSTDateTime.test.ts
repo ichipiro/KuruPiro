@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { JSTDateTime } from '@/domain/value-objects/JSTDateTime';
-import { GTFSTime } from '@/domain/value-objects/GTFSTime';
+import { JSTDateTime } from '@/domain/value-objects/time';
+import { GTFSTime } from '@/domain/value-objects/time';
 
 describe('JSTDateTime', () => {
   describe('now', () => {

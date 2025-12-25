@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RemainingTime } from '@/domain/value-objects/RemainingTime';
+import { RemainingTime } from '@/domain/value-objects/identifiers';
 
 describe('RemainingTime', () => {
   describe('fromMinutes', () => {

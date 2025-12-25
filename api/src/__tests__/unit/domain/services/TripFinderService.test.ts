@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TripFinderService } from '@/domain/services/TripFinderService';
-import { StopId } from '@/domain/value-objects/StopId';
-import { JSTDateTime } from '@/domain/value-objects/JSTDateTime';
-import { GTFSTime } from '@/domain/value-objects/GTFSTime';
+import { StopId } from '@/domain/value-objects/identifiers';
+import { JSTDateTime } from '@/domain/value-objects/time';
+import { GTFSTime } from '@/domain/value-objects/time';
 import type { FindTripsQuery, TripSearchResult } from '@/infrastructure/persistence/queries/FindTripsQuery';
-import type { IRealtimeRepository } from '@/domain/repositories/IRealtimeRepository';
+import type { IRealtimeRepository } from '@/domain/repositories';
 
 describe('TripFinderService', () => {
   let service: TripFinderService;

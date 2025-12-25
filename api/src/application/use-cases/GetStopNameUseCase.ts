@@ -1,5 +1,5 @@
-import { StopId } from '@/domain/value-objects/StopId';
-import type { IStopRepository } from '@/domain/repositories/IStopRepository';
+import { StopId } from '@/domain/value-objects/identifiers';
+import type { IStopRepository } from '@/domain/repositories';
 import type { StopDTO } from '@/application/dto/NextBusDTO';
 
 /**

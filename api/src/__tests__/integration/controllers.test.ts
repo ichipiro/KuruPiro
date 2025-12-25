@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
-import { BusController } from '@/presentation/controllers/BusController';
-import { StopController } from '@/presentation/controllers/StopController';
+import { BusController } from '@/presentation/controllers';
+import { StopController } from '@/presentation/controllers';
 import { ServiceFactory } from '@/infrastructure/di/ServiceFactory';
 import type { Env } from '@/types';
 
@@ -11,12 +11,20 @@ import type { Env } from '@/types';
  * ServiceFactoryを使用してコントローラーの動作を検証します。
  */
 describe('Controllers Integration Tests', () => {
-  let app: Hono;
+  let app: Hono<{
+    Variables: {
+      factory: ServiceFactory;
+    };
+  }>;
   let mockEnv: Env;
   let mockFactory: ServiceFactory;
 
   beforeEach(() => {
-    app = new Hono();
+    app = new Hono<{
+      Variables: {
+        factory: ServiceFactory;
+      };
+    }>();
 
     // モックEnvの作成
     mockEnv = {
@@ -66,7 +74,7 @@ describe('Controllers Integration Tests', () => {
 
       expect(response.status).toBe(200);
 
-      const data = await response.json();
+      const data = (await response.json()) as any[];
       expect(Array.isArray(data)).toBe(true);
       expect(data).toHaveLength(1);
       expect(data[0]).toMatchObject({
@@ -110,7 +118,7 @@ describe('Controllers Integration Tests', () => {
 
       expect(response.status).toBe(200);
 
-      const data = await response.json();
+      const data = (await response.json()) as any[];
       expect(data).toHaveLength(3); // 3件に制限される
     });
 
@@ -123,13 +131,13 @@ describe('Controllers Integration Tests', () => {
       // 上限テスト（20を超える値）
       const response1 = await app.request('/api/origin/dest?response_size=100');
       expect(response1.status).toBe(200);
-      const data1 = await response1.json();
+      const data1 = (await response1.json()) as any[];
       expect(data1.length).toBeLessThanOrEqual(20);
 
       // 下限テスト（0または負の値）
       const response2 = await app.request('/api/origin/dest?response_size=0');
       expect(response2.status).toBe(200);
-      const data2 = await response2.json();
+      const data2 = (await response2.json()) as any[];
       expect(data2.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -159,7 +167,7 @@ describe('Controllers Integration Tests', () => {
       const response = await app.request('/api/origin/dest');
       expect(response.status).toBe(500);
 
-      const data = await response.json();
+      const data = (await response.json()) as any;
       expect(data).toHaveProperty('error');
       expect(data.error).toBe('Database error');
     });
@@ -175,7 +183,7 @@ describe('Controllers Integration Tests', () => {
       const response = await app.request('/api/stop/test_stop/name');
       expect(response.status).toBe(200);
 
-      const data = await response.json();
+      const data = (await response.json()) as any;
       expect(data).toMatchObject({
         stop_id: 'test_stop',
         name: '東京駅',
@@ -197,7 +205,7 @@ describe('Controllers Integration Tests', () => {
       const response = await app.request('/api/stop/unknown/name');
       expect(response.status).toBe(200);
 
-      const data = await response.json();
+      const data = (await response.json()) as any;
       expect(data).toMatchObject({
         stop_id: 'unknown',
         name: null,
@@ -219,7 +227,7 @@ describe('Controllers Integration Tests', () => {
       const response = await app.request('/api/stop/test/name');
       expect(response.status).toBe(500);
 
-      const data = await response.json();
+      const data = (await response.json()) as any;
       expect(data).toHaveProperty('error');
     });
   });

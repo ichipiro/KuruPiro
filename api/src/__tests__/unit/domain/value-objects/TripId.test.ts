@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TripId } from '@/domain/value-objects/TripId';
+import { TripId } from '@/domain/value-objects/identifiers';
 
 describe('TripId', () => {
   describe('fromString', () => {

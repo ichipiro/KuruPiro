@@ -1,4 +1,4 @@
-import { TripId } from '../value-objects/TripId';
+import { TripId } from '../value-objects/identifiers';
 
 /**
  * バス運行便を表すエンティティ

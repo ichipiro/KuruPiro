@@ -1,10 +1,9 @@
 import { eq, and, gte, lt, sql, inArray } from 'drizzle-orm';
 import { getDBClient } from '@/db/client';
 import { stopTimes, trips, calendar, routes } from '@/db/schema';
-import { StopId } from '@/domain/value-objects/StopId';
-import { GTFSTime } from '@/domain/value-objects/GTFSTime';
-import { TripId } from '@/domain/value-objects/TripId';
-import { IRealtimeRepository } from '@/domain/repositories/IRealtimeRepository';
+import { StopId, TripId } from '@/domain/value-objects/identifiers';
+import { GTFSTime } from '@/domain/value-objects/time';
+import { IRealtimeRepository } from '@/domain/repositories';
 
 /**
  * トリップ検索結果の型

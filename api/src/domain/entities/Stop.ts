@@ -1,4 +1,4 @@
-import { StopId } from '../value-objects/StopId';
+import { StopId } from '../value-objects/identifiers';
 
 /**
  * バス停留所を表すエンティティ

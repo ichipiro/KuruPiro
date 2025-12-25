@@ -9,12 +9,12 @@ import { TripFinderService } from '@/domain/services/TripFinderService';
 import { TimeCalculationService } from '@/domain/services/TimeCalculationService';
 import { FindNextBusesUseCase } from '@/application/use-cases/FindNextBusesUseCase';
 import { GetStopNameUseCase } from '@/application/use-cases/GetStopNameUseCase';
-import type { IStopRepository } from '@/domain/repositories/IStopRepository';
-import type { IRouteRepository } from '@/domain/repositories/IRouteRepository';
-import type { ITripRepository } from '@/domain/repositories/ITripRepository';
-import type { IStopTimeRepository } from '@/domain/repositories/IStopTimeRepository';
-import type { ICalendarRepository } from '@/domain/repositories/ICalendarRepository';
-import type { IRealtimeRepository } from '@/domain/repositories/IRealtimeRepository';
+import type { IStopRepository } from '@/domain/repositories';
+import type { IRouteRepository } from '@/domain/repositories';
+import type { ITripRepository } from '@/domain/repositories';
+import type { IStopTimeRepository } from '@/domain/repositories';
+import type { ICalendarRepository } from '@/domain/repositories';
+import type { IRealtimeRepository } from '@/domain/repositories';
 import type { Env } from '@/types';
 
 /**

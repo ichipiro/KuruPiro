@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm';
-import { IRouteRepository } from '@/domain/repositories/IRouteRepository';
+import { IRouteRepository } from '@/domain/repositories';
 import { Route } from '@/domain/entities/Route';
 import { getDBClient } from '@/db/client';
 import { routes } from '@/db/schema';
-import { RouteMapper } from '../mappers/RouteMapper';
+import { RouteMapper } from '../mappers';
 
 /**
  * Drizzle ORMを使用したRouteリポジトリの実装

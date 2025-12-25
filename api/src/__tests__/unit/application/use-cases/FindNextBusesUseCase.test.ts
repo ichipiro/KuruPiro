@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FindNextBusesUseCase } from '@/application/use-cases/FindNextBusesUseCase';
 import { TripFinderService } from '@/domain/services/TripFinderService';
 import { TimeCalculationService } from '@/domain/services/TimeCalculationService';
-import { StopId } from '@/domain/value-objects/StopId';
-import { JSTDateTime } from '@/domain/value-objects/JSTDateTime';
-import { GTFSTime } from '@/domain/value-objects/GTFSTime';
-import type { IRealtimeRepository } from '@/domain/repositories/IRealtimeRepository';
+import { StopId } from '@/domain/value-objects/identifiers';
+import { JSTDateTime } from '@/domain/value-objects/time';
+import { GTFSTime } from '@/domain/value-objects/time';
+import type { IRealtimeRepository } from '@/domain/repositories';
 import type { TripSearchResult } from '@/infrastructure/persistence/queries/FindTripsQuery';
 
 describe('FindNextBusesUseCase', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Stop } from '@/domain/entities/Stop';
-import { StopId } from '@/domain/value-objects/StopId';
+import { StopId } from '@/domain/value-objects/identifiers';
 
 describe('Stop', () => {
   describe('create', () => {

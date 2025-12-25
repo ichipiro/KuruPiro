@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm';
-import { IStopRepository } from '@/domain/repositories/IStopRepository';
+import { IStopRepository } from '@/domain/repositories';
 import { Stop } from '@/domain/entities/Stop';
-import { StopId } from '@/domain/value-objects/StopId';
+import { StopId } from '@/domain/value-objects/identifiers';
 import { getDBClient } from '@/db/client';
 import { stops } from '@/db/schema';
-import { StopMapper } from '../mappers/StopMapper';
+import { StopMapper } from '../mappers';
 
 /**
  * Drizzle ORMを使用したStopリポジトリの実装

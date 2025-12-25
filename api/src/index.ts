@@ -1,12 +1,18 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env } from '@/types';
-import { injectServiceFactory } from '@/presentation/middleware/serviceFactory';
-import { errorHandler } from '@/presentation/middleware/errorHandler';
-import { BusController } from '@/presentation/controllers/BusController';
-import { StopController } from '@/presentation/controllers/StopController';
+import { injectServiceFactory } from '@/presentation/middleware';
+import { errorHandler } from '@/presentation/middleware';
+import { BusController } from '@/presentation/controllers';
+import { StopController } from '@/presentation/controllers';
+import type { ServiceFactory } from '@/infrastructure/di/ServiceFactory';
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{
+  Bindings: Env;
+  Variables: {
+    factory: ServiceFactory;
+  };
+}>();
 
 // グローバルミドルウェア
 app.use('*', cors());
@@ -51,7 +57,7 @@ app.get('/api/debug/cache-info', async (c) => {
       ageSeconds,
       totalTrips: allUpdates.length,
       now: new Date(now).toISOString(),
-      ...(includeTripIds && { tripIds: allUpdates.map(u => u.tripId.value) }),
+      ...(includeTripIds && { tripIds: allUpdates.map((u) => u.tripId.value) }),
     });
   } catch (error) {
     console.error('Failed to get cache info:', error);
@@ -68,7 +74,7 @@ app.get('/api/debug/realtime/:trip_id', async (c) => {
     const allUpdates = await realtimeRepo.getAllTripUpdates();
 
     // 指定されたtripを探す
-    const targetUpdate = allUpdates.find(update => update.tripId.value === tripId);
+    const targetUpdate = allUpdates.find((update) => update.tripId.value === tripId);
 
     if (!targetUpdate) {
       return c.json({
@@ -82,7 +88,7 @@ app.get('/api/debug/realtime/:trip_id', async (c) => {
     return c.json({
       found: true,
       tripId: targetUpdate.tripId.value,
-      stopTimeUpdates: targetUpdate.stopTimeUpdates.map(update => ({
+      stopTimeUpdates: targetUpdate.stopTimeUpdates.map((update) => ({
         stopSequence: update.stopSequence,
         stopId: update.stopId?.value,
         arrivalDelay: update.arrivalDelay?.toSeconds(),

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { TimeCalculationService } from '@/domain/services/TimeCalculationService';
-import { GTFSTime } from '@/domain/value-objects/GTFSTime';
-import { JSTDateTime } from '@/domain/value-objects/JSTDateTime';
-import { Delay } from '@/domain/value-objects/Delay';
+import { GTFSTime } from '@/domain/value-objects/time';
+import { JSTDateTime } from '@/domain/value-objects/time';
+import { Delay } from '@/domain/value-objects/identifiers';
 
 describe('TimeCalculationService', () => {
   const service = new TimeCalculationService();

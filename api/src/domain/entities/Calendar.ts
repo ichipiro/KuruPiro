@@ -1,4 +1,4 @@
-import { JSTDateTime } from '../value-objects/JSTDateTime';
+import { JSTDateTime } from '../value-objects/time';
 
 /**
  * バス運行カレンダーを表すエンティティ

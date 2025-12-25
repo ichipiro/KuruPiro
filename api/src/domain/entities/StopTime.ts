@@ -1,6 +1,5 @@
-import { TripId } from '../value-objects/TripId';
-import { StopId } from '../value-objects/StopId';
-import { GTFSTime } from '../value-objects/GTFSTime';
+import { TripId, StopId } from '../value-objects/identifiers';
+import { GTFSTime } from '../value-objects/time';
 
 /**
  * バス便の停車時刻を表すエンティティ

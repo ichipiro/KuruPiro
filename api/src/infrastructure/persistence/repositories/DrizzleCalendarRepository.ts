@@ -1,10 +1,10 @@
 import { eq, and, lte, gte } from 'drizzle-orm';
-import { ICalendarRepository } from '@/domain/repositories/ICalendarRepository';
+import { ICalendarRepository } from '@/domain/repositories';
 import { Calendar } from '@/domain/entities/Calendar';
-import { JSTDateTime } from '@/domain/value-objects/JSTDateTime';
+import { JSTDateTime } from '@/domain/value-objects/time';
 import { getDBClient } from '@/db/client';
 import { calendar } from '@/db/schema';
-import { CalendarMapper } from '../mappers/CalendarMapper';
+import { CalendarMapper } from '../mappers';
 
 /**
  * Drizzle ORMを使用したCalendarリポジトリの実装

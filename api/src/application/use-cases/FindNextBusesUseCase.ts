@@ -1,10 +1,8 @@
-import { StopId } from '@/domain/value-objects/StopId';
-import { JSTDateTime } from '@/domain/value-objects/JSTDateTime';
-import { Delay } from '@/domain/value-objects/Delay';
-import { TripId } from '@/domain/value-objects/TripId';
+import { StopId, Delay, TripId } from '@/domain/value-objects/identifiers';
+import { JSTDateTime } from '@/domain/value-objects/time';
 import { TripFinderService } from '@/domain/services/TripFinderService';
 import { TimeCalculationService } from '@/domain/services/TimeCalculationService';
-import type { IRealtimeRepository } from '@/domain/repositories/IRealtimeRepository';
+import type { IRealtimeRepository } from '@/domain/repositories';
 import type { NextBusDTO } from '@/application/dto/NextBusDTO';
 
 /**

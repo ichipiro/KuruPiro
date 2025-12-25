@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Calendar } from '@/domain/entities/Calendar';
-import { JSTDateTime } from '@/domain/value-objects/JSTDateTime';
+import { JSTDateTime } from '@/domain/value-objects/time';
 
 describe('Calendar', () => {
   describe('create', () => {
