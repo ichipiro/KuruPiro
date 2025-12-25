@@ -126,4 +126,41 @@ export class TripUpdate {
   hasAnyDelay(): boolean {
     return this._stopTimeUpdates.some((update) => update.hasDelay());
   }
+
+  /**
+   * 現在のバスの位置（最も近い次の停留所）の stopSequence を取得
+   * フィードに含まれる最小の stopSequence を返す
+   *
+   * @returns 最小の stopSequence。フィードが空の場合は undefined
+   */
+  getCurrentStopSequence(): number | undefined {
+    if (this._stopTimeUpdates.length === 0) {
+      return undefined;
+    }
+
+    const sequences = this._stopTimeUpdates
+      .map((update) => update.stopSequence)
+      .filter((seq): seq is number => seq !== undefined)
+      .sort((a, b) => a - b);
+
+    return sequences.length > 0 ? sequences[0] : undefined;
+  }
+
+  /**
+   * 現在のバスの位置（最も近い次の停留所）の StopId を取得
+   *
+   * @returns 最小の stopSequence に対応する StopId。見つからない場合は undefined
+   */
+  getCurrentStopId(): StopId | undefined {
+    const currentSequence = this.getCurrentStopSequence();
+    if (currentSequence === undefined) {
+      return undefined;
+    }
+
+    const currentUpdate = this._stopTimeUpdates.find(
+      (update) => update.stopSequence === currentSequence
+    );
+
+    return currentUpdate?.stopId;
+  }
 }

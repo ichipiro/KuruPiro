@@ -5,13 +5,14 @@ import { TimeCalculationService } from '@/domain/services/TimeCalculationService
 import { StopId } from '@/domain/value-objects/identifiers';
 import { JSTDateTime } from '@/domain/value-objects/time';
 import { GTFSTime } from '@/domain/value-objects/time';
-import type { IRealtimeRepository } from '@/domain/repositories';
+import type { IRealtimeRepository, IStopRepository } from '@/domain/repositories';
 import type { TripSearchResult } from '@/infrastructure/persistence/queries/FindTripsQuery';
 
 describe('FindNextBusesUseCase', () => {
   let useCase: FindNextBusesUseCase;
   let mockTripFinder: TripFinderService;
   let mockTimeCalculation: TimeCalculationService;
+  let mockStopRepo: IStopRepository;
   let mockRealtimeRepo: IRealtimeRepository;
 
   beforeEach(() => {
@@ -20,6 +21,12 @@ describe('FindNextBusesUseCase', () => {
     } as unknown as TripFinderService;
 
     mockTimeCalculation = new TimeCalculationService();
+
+    mockStopRepo = {
+      findById: vi.fn(),
+      findNameById: vi.fn().mockResolvedValue('テスト停留所'),
+      findAll: vi.fn(),
+    } as unknown as IStopRepository;
 
     mockRealtimeRepo = {
       getAllTripUpdates: vi.fn().mockResolvedValue([]),
@@ -49,6 +56,7 @@ describe('FindNextBusesUseCase', () => {
       useCase = new FindNextBusesUseCase(
         mockTripFinder,
         mockTimeCalculation,
+        mockStopRepo,
         mockRealtimeRepo
       );
 
@@ -89,7 +97,8 @@ describe('FindNextBusesUseCase', () => {
             stopSequence: 5,
             arrivalDelay: {
               toSeconds: () => 300,
-              toDisplayString: () => '5分遅れ'
+              toDisplayString: () => '5分遅れ',
+              hasDelay: () => true,
             }, // 5 minutes delay
             departureDelay: undefined,
           },
@@ -100,13 +109,23 @@ describe('FindNextBusesUseCase', () => {
               stopSequence: 5,
               arrivalDelay: {
                 toSeconds: () => 300,
-                toDisplayString: () => '5分遅れ'
+                toDisplayString: () => '5分遅れ',
+                hasDelay: () => true,
               },
               departureDelay: undefined,
+              getRepresentativeDelay: () => ({
+                toSeconds: () => 300,
+                toDisplayString: () => '5分遅れ',
+                hasDelay: () => true,
+              }),
+              departureTime: undefined,
+              arrivalTime: undefined,
             };
           }
           return undefined;
         },
+        getCurrentStopId: () => undefined,
+        getCurrentStopSequence: () => undefined,
       };
 
       vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
@@ -116,6 +135,7 @@ describe('FindNextBusesUseCase', () => {
       useCase = new FindNextBusesUseCase(
         mockTripFinder,
         mockTimeCalculation,
+        mockStopRepo,
         mockRealtimeRepo
       );
 
@@ -162,6 +182,7 @@ describe('FindNextBusesUseCase', () => {
       useCase = new FindNextBusesUseCase(
         mockTripFinder,
         mockTimeCalculation,
+        mockStopRepo,
         mockRealtimeRepo
       );
 
@@ -185,6 +206,7 @@ describe('FindNextBusesUseCase', () => {
       useCase = new FindNextBusesUseCase(
         mockTripFinder,
         mockTimeCalculation,
+        mockStopRepo,
         mockRealtimeRepo
       );
 
@@ -214,7 +236,8 @@ describe('FindNextBusesUseCase', () => {
 
       useCase = new FindNextBusesUseCase(
         mockTripFinder,
-        mockTimeCalculation
+        mockTimeCalculation,
+        mockStopRepo
         // No realtime repo
       );
 

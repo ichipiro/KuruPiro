@@ -54,6 +54,12 @@ export interface NextBusDTO {
    * GTFS Realtimeフィードに該当stopSequenceのStopTimeUpdateが存在しない場合にtrue
    */
   isArrivedInFeed: boolean;
+
+  /**
+   * 現在のバスの位置（停留所名のみ、例: "Ａシティ中央"）
+   * リアルタイムデータがない場合は空文字列
+   */
+  currentLocation: string;
 }
 
 /**

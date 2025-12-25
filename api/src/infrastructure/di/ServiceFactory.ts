@@ -130,6 +130,7 @@ export class ServiceFactory {
     return new FindNextBusesUseCase(
       this.getTripFinderService(),
       this.getTimeCalculationService(),
+      this.getStopRepository(),
       this.getRealtimeRepository()
     );
   }

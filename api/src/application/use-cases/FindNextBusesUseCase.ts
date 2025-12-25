@@ -2,7 +2,7 @@ import { StopId, Delay, TripId } from '@/domain/value-objects/identifiers';
 import { JSTDateTime } from '@/domain/value-objects/time';
 import { TripFinderService } from '@/domain/services/TripFinderService';
 import { TimeCalculationService } from '@/domain/services/TimeCalculationService';
-import type { IRealtimeRepository } from '@/domain/repositories';
+import type { IRealtimeRepository, IStopRepository } from '@/domain/repositories';
 import type { NextBusDTO } from '@/application/dto/NextBusDTO';
 
 /**
@@ -15,6 +15,7 @@ export class FindNextBusesUseCase {
   constructor(
     private readonly tripFinder: TripFinderService,
     private readonly timeCalculation: TimeCalculationService,
+    private readonly stopRepo: IStopRepository,
     private readonly realtimeRepo?: IRealtimeRepository
   ) {}
 
@@ -62,11 +63,12 @@ export class FindNextBusesUseCase {
     );
 
     // 4. 各トリップを NextBusDTO に変換
-    const buses = tripResults.map((tripResult) => {
+    const buses = await Promise.all(tripResults.map(async (tripResult) => {
       // リアルタイムデータから遅延情報とUnix timestampを取得
       let delay: Delay | undefined;
       let realtimeArrivalTimestamp: number | undefined;
       let isArrivedInFeed = false; // フィードに存在しない = 到着済み
+      let currentLocation = ''; // デフォルトは空文字列
 
       if (tripUpdateMap) {
         const tripUpdate = tripUpdateMap.get(tripResult.tripId);
@@ -90,6 +92,15 @@ export class FindNextBusesUseCase {
           } else {
             // StopTimeUpdateが見つからない = フィードから削除されている = 到着済み
             isArrivedInFeed = true;
+          }
+
+          // 現在位置を取得
+          const currentStopId = tripUpdate.getCurrentStopId();
+          if (currentStopId) {
+            const stopName = await this.stopRepo.findNameById(currentStopId);
+            if (stopName) {
+              currentLocation = stopName;
+            }
           }
         }
       }
@@ -133,10 +144,11 @@ export class FindNextBusesUseCase {
         delaySeconds: delay ? delay.toSeconds() : 0,
         delayDisplay: delay ? delay.toDisplayString() : '',
         isArrivedInFeed, // フィードに存在しない = 到着済み
+        currentLocation, // 現在のバスの位置
       };
 
       return dto;
-    });
+    }));
 
     // 5. 既に到着した便を除外
     const upcomingBuses = buses.filter((bus) => {

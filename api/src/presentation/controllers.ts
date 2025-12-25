@@ -23,6 +23,7 @@ interface NextBusResponseItem {
   remaining_time: string;
   delay: string;
   trip_dest: string;
+  current_location: string;
 }
 /**
  * バス情報のコントローラー
@@ -69,6 +70,7 @@ export class BusController {
         remaining_time: bus.remainingTime,
         delay: bus.delayDisplay,
         trip_dest: bus.destinationLabel,
+        current_location: bus.currentLocation,
       }));
       return c.json(items);
     } catch (error) {
