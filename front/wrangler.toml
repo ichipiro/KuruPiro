@@ -1,3 +1,8 @@
-name = "kurupiro-front"
+name = "kurupiro"
 compatibility_date = "2024-01-01"
 pages_build_output_dir = "dist"
+
+# Preview環境用のService Bindings
+[[env.preview.services]]
+binding = "API"
+service = "kuru-piro-worker"
