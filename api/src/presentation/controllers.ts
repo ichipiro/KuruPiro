@@ -32,7 +32,65 @@ interface NextBusResponseItem {
  */
 export class BusController {
   /**
-   * 次のバスを取得
+   * 次のバスを取得（新API）
+   * GET /api/trips?origin=STOP_A&destination=STOP_B&limit=5
+   */
+  static async getTrips(c: Context): Promise<Response> {
+    try {
+      // クエリパラメータ取得
+      const originId = c.req.query('origin');
+      const destinationId = c.req.query('destination');
+      const limitParam = c.req.query('limit') ?? '5';
+      const limit = Number.parseInt(limitParam, 10);
+
+      // バリデーション
+      if (!originId || !destinationId) {
+        return c.json({ error: 'origin and destination are required' }, 400);
+      }
+
+      // limitのバリデーション
+      const validatedLimit = Math.max(1, Math.min(20, limit));
+
+      // ServiceFactoryを取得
+      const factory = c.get('factory') as ServiceFactory;
+      const useCase = factory.getFindNextBusesUseCase();
+
+      // 値オブジェクトに変換
+      const originStopId = StopId.fromString(originId);
+      const destinationStopId = StopId.fromString(destinationId);
+      const currentDateTime = JSTDateTime.now();
+
+      // ユースケース実行
+      const buses = await useCase.execute(
+        originStopId,
+        destinationStopId,
+        currentDateTime
+      );
+
+      // レスポンスサイズで制限
+      const limitedBuses = buses.slice(0, validatedLimit);
+
+      // レスポンス形式に変換
+      const items: NextBusResponseItem[] = limitedBuses.map((bus) => ({
+        trip_id: bus.tripId,
+        trip_short_id: bus.routeShortName,
+        arrival_time: bus.scheduledArrival,
+        remaining_time: bus.remainingTime,
+        delay: bus.delayDisplay,
+        trip_dest: bus.destinationLabel,
+        current_location: bus.currentLocation,
+      }));
+
+      return c.json(items);
+    } catch (error) {
+      console.error('Error in BusController.getTrips:', error);
+      const message = error instanceof Error ? error.message : 'Internal Server Error';
+      return c.json({ error: message }, 500);
+    }
+  }
+
+  /**
+   * 次のバスを取得（旧API - 後方互換性のため維持）
    * GET /api/:stop_id/:dest_stop_id
    */
   static async getNextBuses(c: Context): Promise<Response> {
@@ -94,7 +152,50 @@ interface StopNameResponse {
  */
 export class StopController {
   /**
-   * 停留所名を取得
+   * 停留所情報を取得（新API）
+   * GET /api/stops/:stop_id
+   */
+  static async getStopInfo(c: Context): Promise<Response> {
+    try {
+      // パラメータ取得
+      const stopIdParam = c.req.param('stop_id');
+
+      // バリデーション
+      if (!stopIdParam) {
+        return c.json({ error: 'stop_id is required' }, 400);
+      }
+
+      // ServiceFactoryを取得
+      const factory = c.get('factory') as ServiceFactory;
+      const useCase = factory.getGetStopNameUseCase();
+
+      // 値オブジェクトに変換
+      const stopId = StopId.fromString(stopIdParam);
+
+      // ユースケース実行
+      const stopDto = await useCase.execute(stopId);
+
+      // レスポンス形式に変換
+      if (!stopDto) {
+        return c.json({
+          stop_id: stopIdParam,
+          name: null,
+        });
+      }
+
+      return c.json({
+        stop_id: stopIdParam,
+        name: stopDto.stopName,
+      });
+    } catch (error) {
+      console.error('Error in StopController.getStopInfo:', error);
+      const message = error instanceof Error ? error.message : 'Internal Server Error';
+      return c.json({ error: message }, 500);
+    }
+  }
+
+  /**
+   * 停留所名を取得（旧API - 後方互換性のため維持）
    * GET /api/stop/:stop_id/name
    */
   static async getStopName(c: Context): Promise<Response> {

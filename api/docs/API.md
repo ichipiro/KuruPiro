@@ -17,11 +17,25 @@ http://localhost:8787
 
 ## エンドポイント一覧
 
+### 新API（推奨）
+
+| メソッド | パス | 説明 |
+|---------|------|------|
+| GET | `/api/trips` | 次のバスを検索（クエリパラメータ版） |
+| GET | `/api/stops/:stop_id` | 停留所情報を取得 |
+
+### 旧API（後方互換性のため維持）
+
+| メソッド | パス | 説明 |
+|---------|------|------|
+| GET | `/api/:stop_id/:dest_stop_id` | 次のバスを検索（パスパラメータ版） |
+| GET | `/api/stop/:stop_id/name` | 停留所名を取得 |
+
+### その他
+
 | メソッド | パス | 説明 |
 |---------|------|------|
 | GET | `/` | ヘルスチェック |
-| GET | `/api/:stop_id/:dest_stop_id` | 次のバスを検索 |
-| GET | `/api/stop/:stop_id/name` | 停留所名を取得 |
 
 ---
 
@@ -60,29 +74,24 @@ curl https://your-worker.your-subdomain.workers.dev/
 
 ---
 
-## 2. 次のバスを検索
+## 2. 次のバスを検索（新API）
 
 出発地と目的地を指定して、次に利用可能なバスを検索します。リアルタイムの遅延情報も含まれます。
 
 ### リクエスト
 
 ```http
-GET /api/:stop_id/:dest_stop_id?response_size=5 HTTP/1.1
+GET /api/trips?origin=STOP_A&destination=STOP_B&limit=5 HTTP/1.1
 Host: your-worker.your-subdomain.workers.dev
 ```
-
-### パスパラメータ
-
-| パラメータ | 型 | 必須 | 説明 |
-|----------|-----|------|------|
-| stop_id | string | ✓ | 出発地の停留所ID |
-| dest_stop_id | string | ✓ | 目的地の停留所ID |
 
 ### クエリパラメータ
 
 | パラメータ | 型 | 必須 | デフォルト | 範囲 | 説明 |
 |----------|-----|------|----------|------|------|
-| response_size | integer | - | 5 | 1-20 | 返却する結果の最大件数 |
+| origin | string | ✓ | - | - | 出発地の停留所ID |
+| destination | string | ✓ | - | - | 目的地の停留所ID |
+| limit | integer | - | 5 | 1-20 | 返却する結果の最大件数 |
 
 ### レスポンス
 
@@ -128,7 +137,7 @@ Host: your-worker.your-subdomain.workers.dev
 
 ```json
 {
-  "error": "stop_id and dest_stop_id are required"
+  "error": "origin and destination are required"
 }
 ```
 
@@ -147,20 +156,25 @@ Host: your-worker.your-subdomain.workers.dev
 #### 基本的な使用
 
 ```bash
-curl "https://your-worker.your-subdomain.workers.dev/api/stop_001/stop_010"
+curl "https://your-worker.your-subdomain.workers.dev/api/trips?origin=stop_001&destination=stop_010"
 ```
 
-#### レスポンスサイズを指定
+#### 結果数を指定
 
 ```bash
-curl "https://your-worker.your-subdomain.workers.dev/api/stop_001/stop_010?response_size=10"
+curl "https://your-worker.your-subdomain.workers.dev/api/trips?origin=stop_001&destination=stop_010&limit=10"
 ```
 
 #### JavaScriptでの使用
 
 ```javascript
-const fetchNextBuses = async (originStopId, destStopId, responseSize = 5) => {
-  const url = `https://your-worker.your-subdomain.workers.dev/api/${originStopId}/${destStopId}?response_size=${responseSize}`;
+const fetchNextBuses = async (originStopId, destStopId, limit = 5) => {
+  const params = new URLSearchParams({
+    origin: originStopId,
+    destination: destStopId,
+    limit: limit.toString()
+  });
+  const url = `https://your-worker.your-subdomain.workers.dev/api/trips?${params}`;
 
   try {
     const response = await fetch(url);
@@ -196,14 +210,14 @@ fetchNextBuses('stop_001', 'stop_010', 10)
 
 ---
 
-## 3. 停留所名を取得
+## 3. 停留所情報を取得（新API）
 
-停留所IDから停留所の名称を取得します。
+停留所IDから停留所の情報を取得します。
 
 ### リクエスト
 
 ```http
-GET /api/stop/:stop_id/name HTTP/1.1
+GET /api/stops/:stop_id HTTP/1.1
 Host: your-worker.your-subdomain.workers.dev
 ```
 
@@ -258,13 +272,13 @@ Host: your-worker.your-subdomain.workers.dev
 #### 基本的な使用
 
 ```bash
-curl "https://your-worker.your-subdomain.workers.dev/api/stop/stop_001/name"
+curl "https://your-worker.your-subdomain.workers.dev/api/stops/stop_001"
 ```
 
 #### 存在しない停留所
 
 ```bash
-curl "https://your-worker.your-subdomain.workers.dev/api/stop/unknown_stop/name"
+curl "https://your-worker.your-subdomain.workers.dev/api/stops/unknown_stop"
 ```
 
 レスポンス:
@@ -278,8 +292,8 @@ curl "https://your-worker.your-subdomain.workers.dev/api/stop/unknown_stop/name"
 #### JavaScriptでの使用
 
 ```javascript
-const getStopName = async (stopId) => {
-  const url = `https://your-worker.your-subdomain.workers.dev/api/stop/${stopId}/name`;
+const getStopInfo = async (stopId) => {
+  const url = `https://your-worker.your-subdomain.workers.dev/api/stops/${stopId}`;
 
   try {
     const response = await fetch(url);
@@ -289,18 +303,19 @@ const getStopName = async (stopId) => {
     }
 
     const data = await response.json();
-    return data.name;
+    return data;
   } catch (error) {
-    console.error('Failed to fetch stop name:', error);
+    console.error('Failed to fetch stop info:', error);
     throw error;
   }
 };
 
 // 使用例
-getStopName('stop_001')
-  .then(name => {
-    if (name) {
-      console.log(`停留所名: ${name}`);
+getStopInfo('stop_001')
+  .then(info => {
+    if (info.name) {
+      console.log(`停留所ID: ${info.stop_id}`);
+      console.log(`停留所名: ${info.name}`);
     } else {
       console.log('停留所が見つかりませんでした');
     }
@@ -364,3 +379,64 @@ APIのバージョニングは、将来的にパスに含める予定です（�
 ## サポート
 
 問題や質問がある場合は、GitHubリポジトリのIssuesセクションで報告してください。
+
+---
+
+# 旧API（非推奨 - 後方互換性のため維持）
+
+以下のエンドポイントは後方互換性のために維持されていますが、新規開発では新APIの使用を推奨します。
+
+## 旧1. 次のバスを検索（パスパラメータ版）
+
+### リクエスト
+
+```http
+GET /api/:stop_id/:dest_stop_id?response_size=5 HTTP/1.1
+Host: your-worker.your-subdomain.workers.dev
+```
+
+### パスパラメータ
+
+| パラメータ | 型 | 必須 | 説明 |
+|----------|-----|------|------|
+| stop_id | string | ✓ | 出発地の停留所ID |
+| dest_stop_id | string | ✓ | 目的地の停留所ID |
+
+### クエリパラメータ
+
+| パラメータ | 型 | 必須 | デフォルト | 範囲 | 説明 |
+|----------|-----|------|----------|------|------|
+| response_size | integer | - | 5 | 1-20 | 返却する結果の最大件数 |
+
+### 使用例
+
+```bash
+curl "https://your-worker.your-subdomain.workers.dev/api/stop_001/stop_010?response_size=10"
+```
+
+**移行先:** `GET /api/trips?origin=stop_001&destination=stop_010&limit=10`
+
+---
+
+## 旧2. 停留所名を取得
+
+### リクエスト
+
+```http
+GET /api/stop/:stop_id/name HTTP/1.1
+Host: your-worker.your-subdomain.workers.dev
+```
+
+### パスパラメータ
+
+| パラメータ | 型 | 必須 | 説明 |
+|----------|-----|------|------|
+| stop_id | string | ✓ | 停留所ID |
+
+### 使用例
+
+```bash
+curl "https://your-worker.your-subdomain.workers.dev/api/stop/stop_001/name"
+```
+
+**移行先:** `GET /api/stops/stop_001`
