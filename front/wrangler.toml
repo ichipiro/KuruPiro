@@ -7,7 +7,4 @@ pages_build_output_dir = "dist"
 binding = "API"
 service = "kuru-piro-worker"
 
-# Preview環境も一時的に本番Workerを参照
-[[env.preview.services]]
-binding = "API"
-service = "kuru-piro-worker"
+# Preview環境はHTTPでブランチ固有のWorkerにアクセスするため、Service Bindingは不要
