@@ -15,7 +15,18 @@ const app = new Hono<{
 }>();
 
 // グローバルミドルウェア
-app.use('*', cors());
+// DEBUG_MODEがtrueの場合のみオープンなCORS設定を使用
+app.use('*', async (c, next) => {
+  const isDebugMode = c.env.DEBUG_MODE === 'true';
+  if (isDebugMode) {
+    return cors({
+      origin: '*',
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization'],
+    })(c, next);
+  }
+  return cors()(c, next);
+});
 app.use('*', injectServiceFactory());
 app.use('*', errorHandler);
 

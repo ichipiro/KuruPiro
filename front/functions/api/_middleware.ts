@@ -1,12 +1,11 @@
 /**
- * Pages Function that proxies requests to the Worker via Service Binding
- * This allows the Worker to be private and only accessible through Pages
+ * Middleware that proxies all /api/* requests to the Worker via Service Binding
  */
 interface Env {
   API: Fetcher;
 }
 
-export async function onRequest(context: { request: Request; env: Env }) {
+export async function onRequest(context: { request: Request; env: Env; next: () => Promise<Response> }) {
   const { request, env } = context;
   const url = new URL(request.url);
 
@@ -23,10 +22,11 @@ export async function onRequest(context: { request: Request; env: Env }) {
 
   try {
     // Forward the request to the Worker via Service Binding
-    // Service Binding allows internal communication without going through the internet
-    const workerRequest = new Request(`https://api/api/trips${url.search}`, {
+    // Preserve the full path and query string
+    const workerRequest = new Request(`https://api${url.pathname}${url.search}`, {
       method: request.method,
       headers: request.headers,
+      body: request.body,
     });
 
     const response = await env.API.fetch(workerRequest);

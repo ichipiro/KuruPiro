@@ -5,6 +5,8 @@ export interface Env {
   GTFS_REALTIME_URL: string;
   REALTIME_UPDATE_INTERVAL?: string;
   REALTIME_CACHE: DurableObjectNamespace;
+  ANALYTICS: AnalyticsEngineDataset;
+  DEBUG_MODE?: string;
 }
 
 export interface StopTimeRow {

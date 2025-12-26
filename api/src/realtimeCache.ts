@@ -8,15 +8,18 @@ import { ProtobufDecoder } from './infrastructure/external/gtfs/ProtobufDecoder'
 export class RealtimeCache implements DurableObject {
   private state: DurableObjectState;
   private env: Env;
-  private updateInterval: number;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
+  }
 
-    // Get update interval from env, default to 15 seconds
-    const intervalStr = env.REALTIME_UPDATE_INTERVAL;
-    this.updateInterval = intervalStr ? parseInt(intervalStr, 10) * 1000 : 15_000;
+  /**
+   * Get the update interval from environment variables
+   */
+  private getUpdateInterval(): number {
+    const intervalStr = this.env.REALTIME_UPDATE_INTERVAL;
+    return intervalStr ? parseInt(intervalStr, 10) * 1000 : 15_000;
   }
 
   /**
@@ -50,7 +53,7 @@ export class RealtimeCache implements DurableObject {
   async alarm(): Promise<void> {
     await this.updateRealtimeData();
     // Schedule next update
-    await this.state.storage.setAlarm(Date.now() + this.updateInterval);
+    await this.state.storage.setAlarm(Date.now() + this.getUpdateInterval());
   }
 
   /**
@@ -67,7 +70,7 @@ export class RealtimeCache implements DurableObject {
       // Schedule first alarm
       const currentAlarm = await this.state.storage.getAlarm();
       if (currentAlarm === null) {
-        await this.state.storage.setAlarm(Date.now() + this.updateInterval);
+        await this.state.storage.setAlarm(Date.now() + this.getUpdateInterval());
       }
       return (await this.state.storage.get<CachedRealtimeData>('realtimeData')) ?? null;
     }

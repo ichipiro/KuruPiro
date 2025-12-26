@@ -232,9 +232,24 @@ export class JSTDateTime {
 
   /**
    * 現在のJST時刻を取得
+   * Cloudflare WorkersはUTC環境のため、UTC時刻からJSTの年月日時分秒を計算
    */
   static now(): JSTDateTime {
-    return new JSTDateTime(new Date());
+    const utcNow = new Date();
+    // UTC時刻をJST(UTC+9)にオフセット
+    const jstMillis = utcNow.getTime() + 9 * 60 * 60 * 1000;
+    const jstDate = new Date(jstMillis);
+
+    // JST の年月日時分秒を取得（UTC基準で取得したものがJSTの値）
+    const year = jstDate.getUTCFullYear();
+    const month = jstDate.getUTCMonth() + 1;
+    const day = jstDate.getUTCDate();
+    const hour = jstDate.getUTCHours();
+    const minute = jstDate.getUTCMinutes();
+    const second = jstDate.getUTCSeconds();
+
+    // fromComponentsを使ってJSTタイムゾーン付きで作成
+    return JSTDateTime.fromComponents(year, month, day, hour, minute, second);
   }
 
   /**
