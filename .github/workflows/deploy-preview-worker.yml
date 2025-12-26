@@ -3,9 +3,6 @@ name: Deploy Preview Worker
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    paths:
-      - 'api/**'
-      - '.github/workflows/deploy-preview-worker.yml'
 
 jobs:
   deploy:
