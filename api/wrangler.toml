@@ -5,8 +5,8 @@ account_id = "19fc1347cce15e26c18cd792616f737c"
 
 [vars]
 GTFS_STATIC_URL = "https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip"
-GTFS_REALTIME_URL = "https://ajt-mobusta-gtfs.mcapps.jp/realtime/8"
-REALTIME_UPDATE_INTERVAL = "15"
+GTFS_REALTIME_URL = "https://ajt-mobusta-gtfs.mcapps.jp/realtime/8/trip_updates.bin"
+REALTIME_UPDATE_INTERVAL = "30"
 
 [[kv_namespaces]]
 binding = "GTFS_CACHE"
@@ -18,5 +18,55 @@ binding = "DB"
 database_name = "kurupiro-db"
 database_id = "072a7020-ff60-4958-8def-48017c0df486"
 
+[[durable_objects.bindings]]
+name = "REALTIME_CACHE"
+class_name = "RealtimeCache"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GtfsRealtimeDO"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["GtfsRealtimeDO"]
+new_sqlite_classes = ["RealtimeCache"]
+
 [triggers]
 crons = ["0 3 * * *"]
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+head_sampling_rate = 1
+
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "kurupiro_analytics"
+
+# Preview environment for debugging
+[env.preview]
+[env.preview.vars]
+GTFS_STATIC_URL = "https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip"
+GTFS_REALTIME_URL = "https://ajt-mobusta-gtfs.mcapps.jp/realtime/8/trip_updates.bin"
+REALTIME_UPDATE_INTERVAL = "30"
+DEBUG_MODE = "true"
+
+[[env.preview.kv_namespaces]]
+binding = "GTFS_CACHE"
+preview_id = "2d375ea9773e409a9196248637516aea"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "kurupiro-db"
+database_id = "072a7020-ff60-4958-8def-48017c0df486"
+
+[[env.preview.durable_objects.bindings]]
+name = "REALTIME_CACHE"
+class_name = "RealtimeCache"
+
+[[env.preview.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "kurupiro_analytics_preview"

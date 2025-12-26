@@ -1,175 +1,135 @@
-import { findTripsForStops, lookupStopName } from './staticData';
-import { getRealtimeDelay } from './realtime';
-import { Env, NextBusResponseItem } from './types';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import type { Env } from '@/types';
+import { injectServiceFactory } from '@/presentation/middleware';
+import { errorHandler } from '@/presentation/middleware';
+import { BusController } from '@/presentation/controllers';
+import { StopController } from '@/presentation/controllers';
+import type { ServiceFactory } from '@/infrastructure/di/ServiceFactory';
 
-/**
- * Get current time in JST (UTC+9)
- */
-function getJSTNow(): Date {
-  const now = new Date();
-  const utcTime = now.getTime();
-  const jstOffset = 9 * 60 * 60 * 1000; // 9 hours in milliseconds
-  return new Date(utcTime + jstOffset);
-}
+const app = new Hono<{
+  Bindings: Env;
+  Variables: {
+    factory: ServiceFactory;
+  };
+}>();
 
-function formatRemainingTime(minutes: number): string {
-  if (minutes <= 1) {
-    return 'まもなく到着';
+// グローバルミドルウェア
+// DEBUG_MODEがtrueの場合のみオープンなCORS設定を使用
+app.use('*', async (c, next) => {
+  const isDebugMode = c.env.DEBUG_MODE === 'true';
+  if (isDebugMode) {
+    return cors({
+      origin: '*',
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization'],
+    })(c, next);
   }
-  return `あと${minutes}分`;
-}
+  return cors()(c, next);
+});
+app.use('*', injectServiceFactory());
+app.use('*', errorHandler);
 
-function formatDelay(delayMinutes: number): string {
-  if (delayMinutes <= 0) {
-    return '';
+// ヘルスチェックエンドポイント
+app.get('/', (c) => {
+  return c.json({ status: 'healthy' });
+});
+
+// デバッグ用エンドポイント（ワイルドカードより先に定義）
+// デバッグ用：リアルタイムデータ強制更新
+app.post('/api/debug/update-realtime', async (c) => {
+  try {
+    const factory = c.get('factory');
+    const realtimeRepo = factory.getRealtimeRepository();
+    await realtimeRepo.forceUpdate();
+    return c.json({ status: 'updated', timestamp: Date.now() });
+  } catch (error) {
+    console.error('Failed to update realtime data:', error);
+    return c.json({ error: error instanceof Error ? error.message : 'Update failed' }, 500);
   }
-  return `${delayMinutes}分遅れ`;
-}
+});
 
-function calculateRemainingMinutes(targetTime: string, delaySeconds = 0): number {
-  const now = getJSTNow();
-  const [hour, minute, second] = targetTime.split(':').map((part) => Number.parseInt(part, 10));
-  const target = new Date(now);
-  target.setUTCHours(hour, minute, second, 0);
-  const diff = target.getTime() + delaySeconds * 1000 - now.getTime();
-  return Math.max(0, Math.floor(diff / 60000));
-}
+// デバッグ用：キャッシュの最終更新時刻を取得
+app.get('/api/debug/cache-info', async (c) => {
+  try {
+    const factory = c.get('factory');
+    const realtimeRepo = factory.getRealtimeRepository();
+    const lastUpdated = await realtimeRepo.getLastUpdatedAt();
+    const allUpdates = await realtimeRepo.getAllTripUpdates();
 
-async function handleNextBus(
-  request: Request,
-  env: Env,
-  params: Record<string, string>,
-): Promise<Response> {
-  const originId = params.stop_id;
-  const destinationId = params.dest_stop_id;
-  const url = new URL(request.url);
-  const responseSize = Number.parseInt(url.searchParams.get('response_size') ?? '5', 10);
+    const now = Date.now();
+    const ageSeconds = Math.floor((now - lastUpdated) / 1000);
 
-  const jstNow = getJSTNow();
-  const jsDay = jstNow.getUTCDay();
-  const weekday = (jsDay + 6) % 7;
+    // クエリパラメータでtripIdsを要求された場合はトリップIDのリストを返す
+    const includeTripIds = c.req.query('includeTripIds') === 'true';
 
-  const trips = await findTripsForStops(env, originId, destinationId, weekday);
-  const limitedTrips = trips.slice(0, Math.max(1, Math.min(20, responseSize)));
-
-  const items: NextBusResponseItem[] = [];
-  for (const trip of limitedTrips) {
-    const realtime = await getRealtimeDelay(env, trip.tripId, trip.stopSequence);
-    const delayMinutes = realtime.delaySeconds
-      ? Math.ceil(realtime.delaySeconds / 60)
-      : 0;
-    const remainingMinutes = calculateRemainingMinutes(
-      trip.arrivalTime,
-      realtime.delaySeconds,
-    );
-    items.push({
-      trip_id: trip.tripId,
-      trip_short_id: trip.routeShortName,
-      arrival_time: trip.arrivalTime.slice(0, 5),
-      remaining_time: formatRemainingTime(remainingMinutes),
-      delay: formatDelay(delayMinutes),
-      trip_dest: trip.destinationLabel,
+    return c.json({
+      lastUpdatedAt: new Date(lastUpdated).toISOString(),
+      ageSeconds,
+      totalTrips: allUpdates.length,
+      now: new Date(now).toISOString(),
+      ...(includeTripIds && { tripIds: allUpdates.map((u) => u.tripId.value) }),
     });
+  } catch (error) {
+    console.error('Failed to get cache info:', error);
+    return c.json({ error: error instanceof Error ? error.message : 'Failed' }, 500);
   }
+});
 
-  return Response.json(items, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
-}
+// デバッグ用：リアルタイムデータ詳細取得
+app.get('/api/debug/realtime/:trip_id', async (c) => {
+  try {
+    const tripId = c.req.param('trip_id');
+    const factory = c.get('factory');
+    const realtimeRepo = factory.getRealtimeRepository();
+    const allUpdates = await realtimeRepo.getAllTripUpdates();
 
-async function handleStopName(env: Env, params: Record<string, string>): Promise<Response> {
-  const stopId = params.stop_id;
-  const name = await lookupStopName(env, stopId);
-  return Response.json({ stop_id: stopId, name }, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
-}
+    // 指定されたtripを探す
+    const targetUpdate = allUpdates.find((update) => update.tripId.value === tripId);
 
-async function handleHealth(): Promise<Response> {
-  return Response.json({ status: 'healthy' }, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
-}
+    if (!targetUpdate) {
+      return c.json({
+        found: false,
+        totalTrips: allUpdates.length,
+        message: `Trip ${tripId} not found in realtime data`
+      });
+    }
 
-function matchRoute(pathname: string): { handler: string; params: Record<string, string> } | null {
-  const nextBusMatch = pathname.match(/^\/api\/([^\/]+)\/([^\/]+)/);
-  if (nextBusMatch) {
-    return {
-      handler: 'nextBus',
-      params: { stop_id: decodeURIComponent(nextBusMatch[1]), dest_stop_id: decodeURIComponent(nextBusMatch[2]) },
-    };
+    // 詳細情報を返す
+    return c.json({
+      found: true,
+      tripId: targetUpdate.tripId.value,
+      stopTimeUpdates: targetUpdate.stopTimeUpdates.map((update) => ({
+        stopSequence: update.stopSequence,
+        stopId: update.stopId?.value,
+        arrivalDelay: update.arrivalDelay?.toSeconds(),
+        arrivalTime: update.arrivalTime,
+        departureDelay: update.departureDelay?.toSeconds(),
+        departureTime: update.departureTime,
+        representativeDelay: update.getRepresentativeDelay().toSeconds(),
+      }))
+    });
+  } catch (error) {
+    console.error('Failed to get realtime data:', error);
+    return c.json({ error: error instanceof Error ? error.message : 'Failed' }, 500);
   }
-  const stopNameMatch = pathname.match(/^\/api\/stop\/([^\/]+)\/name/);
-  if (stopNameMatch) {
-    return {
-      handler: 'stopName',
-      params: { stop_id: decodeURIComponent(stopNameMatch[1]) },
-    };
-  }
-  if (pathname === '/' || pathname === '') {
-    return {
-      handler: 'health',
-      params: {},
-    };
-  }
-  return null;
-}
+});
 
+app.get('/api/trips', BusController.getTrips);
+app.get('/api/stops/:stop_id', StopController.getStopInfo);
+
+// グローバルエラーハンドラー
+app.onError((err, c) => {
+  console.error('Worker error', err);
+  return c.json({ error: err.message || 'Internal Server Error' }, 500);
+});
+
+// Durable Objectのエクスポート
+export { RealtimeCache } from './realtimeCache';
+
+// Workerのエクスポート
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    // Handle CORS preflight requests
-    if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-          'Access-Control-Max-Age': '86400',
-        },
-      });
-    }
-
-    try {
-      const url = new URL(request.url);
-      const match = matchRoute(url.pathname);
-      if (!match) {
-        return new Response('Not Found', { status: 404 });
-      }
-
-      switch (match.handler) {
-        case 'nextBus':
-          return await handleNextBus(request, env, match.params);
-        case 'stopName':
-          return await handleStopName(env, match.params);
-        case 'health':
-          return await handleHealth();
-        default:
-          return new Response('Not Found', { status: 404 });
-      }
-    } catch (error) {
-      console.error('Worker error', error);
-      const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
-      return Response.json({ error: errorMessage }, {
-        status: 500,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
-    }
-  },
-
+  fetch: app.fetch,
   async scheduled(_event: ScheduledEvent, _env: Env, _ctx: ExecutionContext): Promise<void> {
     // No-op: D1 data is refreshed by GitHub Actions
     // This cron job is no longer needed but kept for compatibility

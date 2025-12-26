@@ -4,6 +4,9 @@ export interface Env {
   GTFS_STATIC_URL: string;
   GTFS_REALTIME_URL: string;
   REALTIME_UPDATE_INTERVAL?: string;
+  REALTIME_CACHE: DurableObjectNamespace;
+  ANALYTICS: AnalyticsEngineDataset;
+  DEBUG_MODE?: string;
 }
 
 export interface StopTimeRow {
@@ -61,4 +64,21 @@ export interface NextBusResponseItem {
 export interface RealtimeDelayResult {
   delaySeconds?: number;
   timestampSeconds?: number;
+}
+
+export interface TripUpdateEntity {
+  tripId: string;
+  stopTimeUpdates: {
+    stopSequence?: number;
+    stopId?: string;
+    arrivalDelay?: number;
+    arrivalTime?: number;
+    departureDelay?: number;
+    departureTime?: number;
+  }[];
+}
+
+export interface CachedRealtimeData {
+  fetchedAt: number;
+  tripUpdates: TripUpdateEntity[];
 }

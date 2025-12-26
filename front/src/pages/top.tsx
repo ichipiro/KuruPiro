@@ -17,13 +17,14 @@ function NextBusesList() {
         await startWorker();
       }
       try {
-        const piroResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/22030_2/51240_', {
+        const baseUrl = import.meta.env.VITE_BACKEND_URL || '';
+        const piroResponse = await fetch(baseUrl + '/api/trips?origin=22030_2&destination=51240_', {
           method: "GET",
         });
         const piroData = await piroResponse.json();
         setPiroData(piroData);
         console.log(piroData)
-        const numaResponse = await fetch(import.meta.env.VITE_BACKEND_URL + '/api/24140_1/51240_', {
+        const numaResponse = await fetch(baseUrl + '/api/trips?origin=24140_1&destination=51240_', {
           method: "GET",
         });
         const numaData = await numaResponse.json();
