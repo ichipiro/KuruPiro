@@ -8,3 +8,6 @@ binding = "API"
 service = "kuru-piro-worker"
 
 # Preview環境はHTTPでブランチ固有のWorkerにアクセスするため、Service Bindingは不要
+# Worker URLのサブドメインを環境変数で設定
+[vars]
+WORKER_SUBDOMAIN = "ichipiro-explorer"

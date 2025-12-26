@@ -52,7 +52,7 @@ jobs:
         with:
           script: |
             const workerName = '${{ steps.sanitize.outputs.worker_name }}';
-            const workerUrl = 'https://' + workerName + '.workers.dev';
+            const workerUrl = 'https://' + workerName + '.ichipiro-explorer.workers.dev';
             const body = '### 🚀 Preview Worker Deployed\n\n' +
               'Worker Name: `' + workerName + '`\n' +
               'Worker URL: ' + workerUrl + '\n\n' +

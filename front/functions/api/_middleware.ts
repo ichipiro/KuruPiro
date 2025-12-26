@@ -8,6 +8,7 @@
 interface Env {
   API?: Fetcher;
   CF_PAGES_BRANCH?: string;
+  WORKER_SUBDOMAIN?: string;
 }
 
 /**
@@ -55,8 +56,8 @@ export async function onRequest(context: { request: Request; env: Env; next: () 
     const workerName = `kuru-piro-worker-${sanitizedBranch}`;
 
     // Cloudflare Workers URL format: {worker-name}.{account-subdomain}.workers.dev
-    // Note: The account subdomain may need to be configured
-    const workerUrl = `https://${workerName}.workers.dev${url.pathname}${url.search}`;
+    const subdomain = env.WORKER_SUBDOMAIN || 'workers';
+    const workerUrl = `https://${workerName}.${subdomain}.workers.dev${url.pathname}${url.search}`;
 
     const workerRequest = new Request(workerUrl, {
       method: request.method,
