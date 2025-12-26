@@ -49,9 +49,8 @@ jobs:
         with:
           script: |
             const workerName = '${{ steps.sanitize.outputs.worker_name }}';
-            const body = `### 🧹 Preview Worker Cleaned Up
-
-Worker \`${workerName}\` has been deleted.`;
+            const body = '### 🧹 Preview Worker Cleaned Up\n\n' +
+              'Worker `' + workerName + '` has been deleted.';
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,

@@ -52,18 +52,15 @@ jobs:
         with:
           script: |
             const workerName = '${{ steps.sanitize.outputs.worker_name }}';
-            const workerUrl = `https://${workerName}.workers.dev`;
-            const body = `### 🚀 Preview Worker Deployed
-
-Worker Name: \`${workerName}\`
-Worker URL: ${workerUrl}
-
-**Test the API:**
-\`\`\`bash
-curl "${workerUrl}/api/trips?origin=22030_2&destination=51240_"
-\`\`\`
-
-This preview worker will be automatically deleted when the PR is closed.`;
+            const workerUrl = 'https://' + workerName + '.workers.dev';
+            const body = '### 🚀 Preview Worker Deployed\n\n' +
+              'Worker Name: `' + workerName + '`\n' +
+              'Worker URL: ' + workerUrl + '\n\n' +
+              '**Test the API:**\n' +
+              '```bash\n' +
+              'curl "' + workerUrl + '/api/trips?origin=22030_2&destination=51240_"\n' +
+              '```\n\n' +
+              'This preview worker will be automatically deleted when the PR is closed.';
 
             // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
