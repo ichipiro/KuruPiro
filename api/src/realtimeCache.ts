@@ -107,10 +107,7 @@ export class RealtimeCache implements DurableObject {
     // Add cache busting query parameter to prevent Cloudflare from caching
     const cacheBustingUrl = `${this.env.GTFS_REALTIME_URL}?t=${Date.now()}`;
     console.log(`[RealtimeCache] Fetching from: ${cacheBustingUrl}`);
-    const response = await fetch(cacheBustingUrl, {
-      // Explicitly disable caching
-      cache: 'no-store',
-    });
+    const response = await fetch(cacheBustingUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch realtime data: ${response.status}`);
     }
@@ -120,6 +117,9 @@ export class RealtimeCache implements DurableObject {
     // Use ProtobufDecoder to decode the data
     const rawTripUpdates = ProtobufDecoder.decodeTripUpdates(buffer);
     console.log(`[RealtimeCache] Decoded ${rawTripUpdates.length} trip updates`);
+
+    // Debug: Log first 10 trip IDs
+    console.log('[RealtimeCache] First 10 trip IDs:', rawTripUpdates.slice(0, 10).map(t => t.tripId));
 
     // Convert to TripUpdateEntity format
     return rawTripUpdates.map((raw) => ({

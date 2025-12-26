@@ -61,13 +61,28 @@ export class ProtobufDecoder {
         };
       });
 
+      const originalTripId = entity.tripUpdate.trip.tripId;
+      const normalizedTripId = originalTripId.replace(/ /g, '_');
+
+      // Debug: Log if normalization changed the trip ID
+      if (originalTripId !== normalizedTripId) {
+        console.log(`[ProtobufDecoder] Normalized trip ID: "${originalTripId}" -> "${normalizedTripId}"`);
+      }
+
       tripUpdates.push({
-        tripId: entity.tripUpdate.trip.tripId,
+        // Fix GTFS spec violation: normalize trip_id by replacing spaces with underscores
+        tripId: normalizedTripId,
         stopTimeUpdates,
       });
     }
 
     console.log(`[ProtobufDecoder] Extracted ${tripUpdates.length} trip updates`);
+
+    // Debug: Log first 5 trip IDs
+    if (tripUpdates.length > 0) {
+      console.log('[ProtobufDecoder] First 5 trip IDs:', tripUpdates.slice(0, 5).map(t => t.tripId));
+    }
+
     return tripUpdates;
   }
 }
