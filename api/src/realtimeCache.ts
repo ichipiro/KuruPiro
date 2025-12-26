@@ -104,8 +104,13 @@ export class RealtimeCache implements DurableObject {
    * Fetch trip updates from GTFS Realtime API
    */
   private async fetchRealtimeTripUpdates(): Promise<TripUpdateEntity[]> {
-    console.log(`[RealtimeCache] Fetching from: ${this.env.GTFS_REALTIME_URL}`);
-    const response = await fetch(this.env.GTFS_REALTIME_URL);
+    // Add cache busting query parameter to prevent Cloudflare from caching
+    const cacheBustingUrl = `${this.env.GTFS_REALTIME_URL}?t=${Date.now()}`;
+    console.log(`[RealtimeCache] Fetching from: ${cacheBustingUrl}`);
+    const response = await fetch(cacheBustingUrl, {
+      // Explicitly disable caching
+      cache: 'no-store',
+    });
     if (!response.ok) {
       throw new Error(`Failed to fetch realtime data: ${response.status}`);
     }
