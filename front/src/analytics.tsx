@@ -1,4 +1,4 @@
-const GA_TRACKING_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
+const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
 
 declare global {
     interface Window {
@@ -9,7 +9,7 @@ declare global {
 
 const SCRIPT_ID = 'ga-gtag-script';
 
-export const initGA = (measurementId = GA_TRACKING_ID) => {
+export const initGA = (measurementId = GA_MEASUREMENT_ID) => {
     if (typeof window === 'undefined') return;
     if (!measurementId) return;
     if (document.getElementById(SCRIPT_ID)) return;
