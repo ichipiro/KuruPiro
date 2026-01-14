@@ -1,4 +1,4 @@
-const GA_TRACKING_ID = 'G-7K8G1FW03N'; // Replace with your Google Analytics measurement ID (GA4)
+const GA_TRACKING_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
 
 declare global {
     interface Window {
@@ -11,6 +11,7 @@ const SCRIPT_ID = 'ga-gtag-script';
 
 export const initGA = (measurementId = GA_TRACKING_ID) => {
     if (typeof window === 'undefined') return;
+    if (!measurementId) return;
     if (document.getElementById(SCRIPT_ID)) return;
 
     const script = document.createElement('script');

@@ -26,6 +26,7 @@ const Layout = () => {
   const location = useLocation();
 
   useEffect(() => {
+    if (!import.meta.env.VITE_GA_MEASUREMENT_ID) return;
     // initialize analytics once
     import("./analytics").then(({ initGA, logPageView }) => {
       initGA();
@@ -36,6 +37,7 @@ const Layout = () => {
   }, []);
 
   useEffect(() => {
+    if (!import.meta.env.VITE_GA_MEASUREMENT_ID) return;
     // log page view on route change
     import("./analytics").then(({ logPageView }) => {
       logPageView(location.pathname + location.search);
