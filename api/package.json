@@ -22,20 +22,20 @@
   "dependencies": {
     "@types/pbf": "^3.0.5",
     "drizzle-orm": "^0.44.7",
-    "fflate": "^0.8.1",
+    "fflate": "^0.8.2",
     "gtfs-realtime-bindings": "^1.1.1",
-    "hono": "^4.10.1",
+    "hono": "^4.11.4",
     "pbf": "^4.0.1"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240405.0",
-    "@tsconfig/recommended": "^1.0.3",
-    "@types/node": "^24.10.1",
-    "@vitest/coverage-v8": "^4.0.16",
-    "drizzle-kit": "^0.31.7",
-    "prettier": "^3.2.5",
-    "typescript": "^5.4.2",
-    "vitest": "^4.0.16",
-    "wrangler": "^4.42.1"
+    "@cloudflare/workers-types": "^4.20260114.0",
+    "@tsconfig/recommended": "^1.0.13",
+    "@types/node": "^24.10.8",
+    "@vitest/coverage-v8": "^4.0.17",
+    "drizzle-kit": "^0.31.8",
+    "prettier": "^3.7.4",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17",
+    "wrangler": "^4.59.1"
   }
 }
