@@ -62,10 +62,9 @@ function calculateRemainingSeconds(targetTime: string, japanDate: Date): number 
   return Math.floor(diffMs / 1000)
 }
 
-export function useBusData(stopId: string, destinations: string = '51240_'): UseBusDataReturn {
-  // response_size=6で6本取得し、表示は4本に制限（余裕を持たせる）
-  // destinations: カンマ区切りで複数の目的地を指定可能 (例: '51240_,10_')
-  const apiUrl = `${import.meta.env.VITE_BACKEND_URL}/api/${stopId}/${destinations}?response_size=8`
+export function useBusData(stopId: string, destination: string = '51240_'): UseBusDataReturn {
+  // limit=8で8本取得し、表示は5本に制限
+  const apiUrl = `${import.meta.env.VITE_BACKEND_URL}/api/trips?origin=${stopId}&destination=${destination}&limit=8`
 
   const { data: rawData, error, isLoading } = useSWR<BusService[]>(
     apiUrl,
@@ -123,13 +122,13 @@ export function useBusData(stopId: string, destinations: string = '51240_'): Use
 }
 
 // 市立大学前 (22030_2)
-// 横川駅前経由(51240_) と 中広町経由バスセンター直行(10_) の両方
+// 広島バスセンター行き (51240_)
 export function usePiroBusData(): UseBusDataReturn {
-  return useBusData('22030_2', '51240_,10_')
+  return useBusData('22030_2', '51240_')
 }
 
 // 沼田料金所前 (24140_1)
-// 横川駅前経由(51240_) と 中広町経由バスセンター直行(10_) の両方
+// 広島バスセンター行き (51240_)
 export function useNumaBusData(): UseBusDataReturn {
-  return useBusData('24140_1', '51240_,10_')
+  return useBusData('24140_1', '51240_')
 }

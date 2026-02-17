@@ -1,6 +1,7 @@
 # くるぴろ API ドキュメント
 
 ## 概要
+
 広島市立大学周辺のバス到着時刻情報を提供するREST APIです。GTFSリアルタイムフィードを活用し、遅延情報や現在位置を含むリアルタイムなバス情報を返します。
 
 **Base URL:** `https://kurupiro.ichipiro.net`
@@ -19,18 +20,14 @@
 GET /api/{stop_id}/{dest_stop_id}
 ```
 
-#### パスパラメータ
-
-| パラメータ | 型 | 必須 | 説明 | 例 |
-|----------|-----|------|------|-----|
-| `stop_id` | string | ✓ | 出発地のバス停ID（GTFS stop_id） | `22030_2` |
-| `dest_stop_id` | string | ✓ | 目的地のバス停IDパターン（カンマ区切り可） | `51240_,10_` |
-
 #### クエリパラメータ
 
-| パラメータ | 型 | デフォルト | 説明 |
-|----------|-----|-----------|------|
-| `response_size` | integer | 5 | 取得するバスの最大件数 |
+| パラメータ | 型 | 必須 | デフォルト | 説明 | 例 |
+|----------|-----|------|-----------|------|-----|
+| `origin` | string | ✓ | - | 出発地のバス停ID（GTFS stop_id） | `22030_2` |
+| `destination` | string | ✓ | - | 目的地のバス停IDパターン | `51240_` |
+| `limit` | integer | - | 5 | 取得するバスの最大件数 | `8` |
+| `via` | string | - | - | 経由地のバス停ID（カンマ区切り可） | `STOP_C,STOP_D` |
 
 #### レスポンス
 
@@ -79,11 +76,13 @@ GET /api/{stop_id}/{dest_stop_id}
 #### 使用例
 
 **リクエスト:**
+
 ```bash
-GET /api/22030_2/51240_,10_?response_size=5
+GET /api/trips?origin=22030_2&destination=51240_&limit=5
 ```
 
 **説明:**
+
 - 市立大学前（`22030_2`）から
 - 広島バスセンター経由（`51240_`）または中広町経由直行（`10_`）
 - 次の5本のバスを取得
@@ -120,6 +119,7 @@ GET /api/stop/{stop_id}/name
 #### 使用例
 
 **リクエスト:**
+
 ```bash
 GET /api/stop/22030_2/name
 ```
@@ -129,11 +129,13 @@ GET /api/stop/22030_2/name
 ## データソース
 
 ### GTFS静的データ
+
 - バス停の位置情報（緯度経度）
 - 時刻表（定刻）
 - 路線情報
 
 ### GTFSリアルタイムフィード
+
 - **trip_updates.bin** - 遅延情報
 - **vehicle_position.bin** - バスのGPS位置
 - **alerts.bin** - 運行情報
@@ -147,6 +149,7 @@ GET /api/stop/22030_2/name
 `dest_stop_id`に`_`で終わるパターンを指定すると、前方一致でマッチします。
 
 **例:**
+
 - `51240_` → `51240_1`, `51240_2`, `51240_3` などすべてにマッチ
 - `51240_,10_` → 複数パターンをカンマ区切りで指定可能
 
@@ -155,6 +158,7 @@ GET /api/stop/22030_2/name
 GTFSリアルタイムの`trip_updates`から、該当バス停の`stop_sequence`に対応する遅延秒数を取得し、分単位に変換します。
 
 **計算式:**
+
 ```
 実際の到着時刻 = GTFS静的データの定刻 + リアルタイムのdelay
 ```
@@ -164,6 +168,7 @@ GTFSリアルタイムの`trip_updates`から、該当バス停の`stop_sequence
 GTFSリアルタイムの`vehicle_position`からバスのGPS位置を取得し、ハバサイン公式で経由停留所との距離を計算。最も近い停留所名を`current_location`として返します。
 
 **アルゴリズム:**
+
 1. バスのGPS位置（緯度経度）を取得
 2. その便が通る全停留所との距離を計算
 3. 最短距離の停留所名を返す
@@ -206,7 +211,7 @@ import useSWR from 'swr'
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export function useBusData(stopId: string, destinations: string = '51240_') {
-  const apiUrl = `${import.meta.env.VITE_BACKEND_URL}/api/${stopId}/${destinations}?response_size=8`
+  const apiUrl = `${import.meta.env.VITE_BACKEND_URL}/api/trips/${stopId}/${destinations}?response_size=8`
 
   const { data, error, isLoading } = useSWR(apiUrl, fetcher, {
     refreshInterval: 15 * 1000,  // 15秒ごとに更新
@@ -234,6 +239,7 @@ const { data } = useNumaBusData()
 ### Q1. `current_location`が`null`になるのはいつ？
 
 **A:** 以下の場合に`null`になります：
+
 - バスがまだ運行開始していない（追跡前）
 - GTFSリアルタイムに位置情報がない
 - GPS情報が取得できない
