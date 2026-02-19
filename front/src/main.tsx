@@ -2,14 +2,35 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import {RouterProvider, createBrowserRouter} from "react-router-dom";
 
-import { SignageLayout } from "./layout";
+import Layout, { SignageLayout } from "./layout";
+
+import TopPage from "./pages/top.tsx";
+import Disclaimer from "./pages/Disclaimer.tsx";
+import Signage from './pages/Signage.tsx';
 
 import './css/index.css'
-import Signage from './pages/Signage.tsx';
 
 const router = createBrowserRouter([
   {
     path: "/",
+    element: <Layout />,
+    children: [
+      {
+        index: true,
+        element: <TopPage />,
+      },
+      {
+        path: "disclaimer",
+        element: <Disclaimer />,
+      },
+      {
+        path: "*",
+        element: <h2>404 Not found</h2>,
+      },
+    ],
+  },
+  {
+    path: "/signage",
     element: <SignageLayout />,
     children: [
       {
