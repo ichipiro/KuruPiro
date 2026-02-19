@@ -72,7 +72,7 @@ describe('FindNextBusesUseCase', () => {
       const destinationStopId = StopId.fromString('dest_stop');
       const currentDateTime = JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0);
 
-      const result = await useCase.execute(originStopId, destinationStopId, currentDateTime);
+      const result = await useCase.execute(originStopId, [destinationStopId], currentDateTime);
 
       expect(result).toHaveLength(1);
       expect(result[0].tripId).toBe('trip1');
@@ -152,7 +152,7 @@ describe('FindNextBusesUseCase', () => {
       const destinationStopId = StopId.fromString('dest_stop');
       const currentDateTime = JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0);
 
-      const result = await useCase.execute(originStopId, destinationStopId, currentDateTime);
+      const result = await useCase.execute(originStopId, [destinationStopId], currentDateTime);
 
       expect(result).toHaveLength(1);
       expect(result[0].scheduledArrival).toBe('10:30');
@@ -200,7 +200,7 @@ describe('FindNextBusesUseCase', () => {
       const destinationStopId = StopId.fromString('dest_stop');
       const currentDateTime = JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0);
 
-      const result = await useCase.execute(originStopId, destinationStopId, currentDateTime);
+      const result = await useCase.execute(originStopId, [destinationStopId], currentDateTime);
 
       expect(result).toHaveLength(2);
       // Should be sorted by remaining time (trip2: 20min, trip1: 40min)
@@ -225,7 +225,7 @@ describe('FindNextBusesUseCase', () => {
       const destinationStopId = StopId.fromString('dest_stop');
       const currentDateTime = JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0);
 
-      const result = await useCase.execute(originStopId, destinationStopId, currentDateTime);
+      const result = await useCase.execute(originStopId, [destinationStopId], currentDateTime);
 
       expect(result).toEqual([]);
     });
@@ -257,7 +257,7 @@ describe('FindNextBusesUseCase', () => {
       const destinationStopId = StopId.fromString('dest_stop');
       const currentDateTime = JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0);
 
-      const result = await useCase.execute(originStopId, destinationStopId, currentDateTime);
+      const result = await useCase.execute(originStopId, [destinationStopId], currentDateTime);
 
       expect(result).toHaveLength(1);
       expect(result[0].delaySeconds).toBe(0);

@@ -4,6 +4,7 @@ import { TripFinderService } from '@/domain/services/TripFinderService';
 import { TimeCalculationService } from '@/domain/services/TimeCalculationService';
 import type { IRealtimeRepository, IStopRepository, IStopTimeRepository } from '@/domain/repositories';
 import type { NextBusDTO } from '@/application/dto/NextBusDTO';
+import type { TripSearchResult } from '@/infrastructure/persistence/queries/FindTripsQuery';
 
 /**
  * 次のバスを検索するユースケース
@@ -24,23 +25,35 @@ export class FindNextBusesUseCase {
    * 次のバスを検索
    *
    * @param originStopId 出発地停留所ID
-   * @param destinationStopId 目的地停留所ID
+   * @param destinationStopIds 目的地停留所IDの配列（複数可）
    * @param currentDateTime 現在時刻（JST）
    * @param viaStopIds 経由地停留所IDの配列（オプション）
    * @returns 次のバス情報のリスト（残り時間順にソート）
    */
   async execute(
     originStopId: StopId,
-    destinationStopId: StopId,
+    destinationStopIds: StopId[],
     currentDateTime: JSTDateTime,
     viaStopIds?: StopId[]
   ): Promise<NextBusDTO[]> {
-    // 1. トリップを検索
-    const tripResults = await this.tripFinder.findTrips(
-      originStopId,
-      destinationStopId,
-      currentDateTime
+    // 1. 各destinationを並列検索
+    const tripResultsPerDest = await Promise.all(
+      destinationStopIds.map(dest =>
+        this.tripFinder.findTrips(originStopId, dest, currentDateTime)
+      )
     );
+
+    // マージ + 同一tripIdは到着時刻が早い方を残す
+    const tripResultMap = new Map<string, TripSearchResult>();
+    for (const results of tripResultsPerDest) {
+      for (const trip of results) {
+        const existing = tripResultMap.get(trip.tripId);
+        if (!existing || trip.arrivalTime.compareTo(existing.arrivalTime) < 0) {
+          tripResultMap.set(trip.tripId, trip);
+        }
+      }
+    }
+    const tripResults = Array.from(tripResultMap.values());
 
     if (tripResults.length === 0) {
       return [];
@@ -52,8 +65,7 @@ export class FindNextBusesUseCase {
       filteredTripResults = await this.filterByViaStops(
         tripResults,
         originStopId,
-        viaStopIds,
-        destinationStopId
+        viaStopIds
       );
 
       if (filteredTripResults.length === 0) {
@@ -205,14 +217,12 @@ export class FindNextBusesUseCase {
    * @param tripResults トリップ検索結果
    * @param originStopId 出発地
    * @param viaStopIds 経由地（順番を保持）
-   * @param destinationStopId 目的地
    * @returns origin → via1 → via2 → ... → destination の順で通過するトリップのみ
    */
   private async filterByViaStops(
     tripResults: any[],
     originStopId: StopId,
-    viaStopIds: StopId[],
-    destinationStopId: StopId
+    viaStopIds: StopId[]
   ): Promise<any[]> {
     const validTrips: any[] = [];
 
@@ -233,6 +243,8 @@ export class FindNextBusesUseCase {
       }
 
       // origin, via1, via2, ..., destination の順番をチェック
+      // tripResultが持つ実際のdestinationStopIdを使用
+      const destinationStopId = StopId.fromString(tripResult.destinationStopId);
       const requiredStops = [originStopId, ...viaStopIds, destinationStopId];
       let previousSequence = -1;
       let isValid = true;
