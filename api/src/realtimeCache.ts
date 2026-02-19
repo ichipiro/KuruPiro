@@ -31,6 +31,19 @@ export class RealtimeCache implements DurableObject {
     // Get cached data
     if (url.pathname === '/data') {
       const data = await this.getCachedData();
+
+      // stale-while-revalidate: キャッシュが古い場合はアラームを即座に再スケジュール
+      if (data) {
+        const ageSeconds = Math.floor((Date.now() - data.fetchedAt) / 1000);
+        if (ageSeconds > this.getUpdateInterval() / 1000) {
+          const currentAlarm = await this.state.storage.getAlarm();
+          if (currentAlarm === null || currentAlarm > Date.now() + 5000) {
+            console.log(`[RealtimeCache] Cache is ${ageSeconds}s old, rescheduling alarm immediately`);
+            await this.state.storage.setAlarm(Date.now() + 1000);
+          }
+        }
+      }
+
       return new Response(JSON.stringify(data), {
         headers: { 'Content-Type': 'application/json' },
       });
