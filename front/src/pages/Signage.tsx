@@ -59,7 +59,7 @@ export default function Signage() {
   const busAreaRef = useRef<HTMLDivElement>(null)
 
   return (
-    <div className="bg-[#005394] h-screen overflow-y-hidden flex gap-[0.625vw]">
+    <div className="signage-root bg-[#005394] h-screen overflow-y-hidden flex gap-[0.625vw]">
       {/* 左サイドバー */}
       <div className="flex-1 min-w-0">
         <Sidebar

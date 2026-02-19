@@ -1,5 +1,23 @@
-@import "tailwindcss";
+@import "tailwindcss/utilities";
 
-html {
+/* サイネージ固有のリセットとフォント設定 */
+.signage-root {
   font-family: 'Inter', 'Helvetica Neue', 'Arial', 'Hiragino Kaku Gothic ProN', 'Meiryo', "Noto Sans JP", sans-serif;
+}
+
+/* Tailwind ユーティリティが前提とするリセット（グローバル汚染を防ぐためスコープ限定） */
+.signage-root *,
+.signage-root *::before,
+.signage-root *::after {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: currentColor;
+}
+
+.signage-root img,
+.signage-root svg,
+.signage-root video {
+  display: block;
+  vertical-align: middle;
 }
