@@ -49,7 +49,12 @@ export class BusController {
 
       // 値オブジェクトに変換
       const originStopId = StopId.fromString(originId);
-      const destinationStopId = StopId.fromString(destinationId);
+      // destinationはカンマ区切りで複数指定可能
+      const destinationStopIds = destinationId
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => s.length > 0)
+        .map(id => StopId.fromString(id));
       const currentDateTime = JSTDateTime.now();
 
       // 経由地をパース（カンマ区切り）
@@ -64,7 +69,7 @@ export class BusController {
       // ユースケース実行
       const buses = await useCase.execute(
         originStopId,
-        destinationStopId,
+        destinationStopIds,
         currentDateTime,
         viaStopIds
       );
