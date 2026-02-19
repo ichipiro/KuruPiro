@@ -39,7 +39,7 @@ export class DurableObjectRealtimeRepository implements IRealtimeRepository {
    * 全てのトリップ更新情報を取得
    */
   async getAllTripUpdates(): Promise<TripUpdate[]> {
-    const data = await this.ensureFreshData();
+    const data = await this.fetchRealtimeData();
     return data.tripUpdates.map((raw) => this.mapToTripUpdate(raw));
   }
 
@@ -47,7 +47,7 @@ export class DurableObjectRealtimeRepository implements IRealtimeRepository {
    * 指定したトリップIDの更新情報を取得
    */
   async getTripUpdate(tripId: TripId): Promise<TripUpdate | undefined> {
-    const data = await this.ensureFreshData();
+    const data = await this.fetchRealtimeData();
     const raw = data.tripUpdates.find((update) => update.tripId === tripId.value);
     if (!raw) {
       return undefined;
