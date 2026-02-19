@@ -6,6 +6,21 @@ import { BusService } from "../types/api.ts";
 
 
 
+async function fetchBusData(url: string, retries = 5, intervalMs = 1000): Promise<BusService[]> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const response = await fetch(url, { method: 'GET' });
+    const data = await response.json();
+    if (Array.isArray(data)) {
+      return data;
+    }
+    console.warn(`attempt ${attempt}/${retries} failed:`, data);
+    if (attempt < retries) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  }
+  return [];
+}
+
 function NextBusesList() {
   const [piroData, setPiroData] = useState<BusService[]>([]);
   const [numaData, setNumaData] = useState<BusService[]>([]);
@@ -18,18 +33,13 @@ function NextBusesList() {
       }
       try {
         const baseUrl = import.meta.env.VITE_BACKEND_URL || '';
-        const piroResponse = await fetch(baseUrl + '/api/trips?origin=22030_2&destination=51240_', {
-          method: "GET",
-        });
-        const piroData = await piroResponse.json();
+        const [piroData, numaData] = await Promise.all([
+          fetchBusData(baseUrl + '/api/trips?origin=22030_2&destination=51240_'),
+          fetchBusData(baseUrl + '/api/trips?origin=24140_1&destination=51240_'),
+        ]);
+        console.log(piroData, numaData);
         setPiroData(piroData);
-        console.log(piroData)
-        const numaResponse = await fetch(baseUrl + '/api/trips?origin=24140_1&destination=51240_', {
-          method: "GET",
-        });
-        const numaData = await numaResponse.json();
         setNumaData(numaData);
-        console.log(numaData)
       } catch (error) {
         console.error('データの取得中にエラーが発生しました:', error);
       } finally {
@@ -82,7 +92,7 @@ function NextBusesList() {
 //   )
 // }
 
-function TopPage(): JSX.Element {
+function TopPage() {
 
   return (
     <>

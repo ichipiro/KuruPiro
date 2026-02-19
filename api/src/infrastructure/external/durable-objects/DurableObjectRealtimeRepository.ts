@@ -16,30 +16,10 @@ export class DurableObjectRealtimeRepository implements IRealtimeRepository {
   }
 
   /**
-   * キャッシュが古い場合は更新（ローカル開発環境対応）
-   */
-  private async ensureFreshData(): Promise<CachedRealtimeData> {
-    const data = await this.fetchRealtimeData();
-
-    // キャッシュが古い場合は強制更新
-    const now = Date.now();
-    const ageSeconds = Math.floor((now - data.fetchedAt) / 1000);
-    const maxAgeSeconds = 30; // 30秒以上古い場合は更新
-
-    if (ageSeconds > maxAgeSeconds) {
-      console.log(`[DurableObjectRealtimeRepository] Cache is ${ageSeconds}s old, forcing update...`);
-      await this.forceUpdate();
-      return await this.fetchRealtimeData();
-    }
-
-    return data;
-  }
-
-  /**
    * 全てのトリップ更新情報を取得
    */
   async getAllTripUpdates(): Promise<TripUpdate[]> {
-    const data = await this.ensureFreshData();
+    const data = await this.fetchRealtimeData();
     return data.tripUpdates.map((raw) => this.mapToTripUpdate(raw));
   }
 
@@ -47,7 +27,7 @@ export class DurableObjectRealtimeRepository implements IRealtimeRepository {
    * 指定したトリップIDの更新情報を取得
    */
   async getTripUpdate(tripId: TripId): Promise<TripUpdate | undefined> {
-    const data = await this.ensureFreshData();
+    const data = await this.fetchRealtimeData();
     const raw = data.tripUpdates.find((update) => update.tripId === tripId.value);
     if (!raw) {
       return undefined;
