@@ -92,7 +92,7 @@ function NextBusesList() {
 //   )
 // }
 
-function TopPage(): JSX.Element {
+function TopPage() {
 
   return (
     <>
