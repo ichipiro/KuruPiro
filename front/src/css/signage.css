@@ -1,4 +1,5 @@
-@import "tailwindcss/utilities";
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
 
 /* サイネージ固有のリセットとフォント設定 */
 .signage-root {
