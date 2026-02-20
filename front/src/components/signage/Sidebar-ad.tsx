@@ -59,7 +59,18 @@ export default function SidebarAdvertisement() {
           transition={{ duration: 0.8 }}
         >
           {currentAd.type === 'video' ? (
-            <video src={currentAd.src} autoPlay muted loop playsInline className="w-full h-full object-cover" />
+            <>
+              <video
+                src={currentAd.src}
+                autoPlay
+                muted
+                loop
+                playsInline
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-full object-cover scale-110 brightness-45"
+              />
+              <video src={currentAd.src} autoPlay muted loop playsInline className="relative z-10 w-full h-full object-contain" />
+            </>
           ) : (
             <img src={currentAd.src} alt={currentAd.alt} className="w-full h-auto max-h-full object-contain" />
           )}
