@@ -2,15 +2,13 @@ import { useState, useEffect } from 'react';
 
 import '../css/top.css'
 import { startWorker } from '../mocks/node'
-import { BusService } from "../types/api.ts";
+import { BusService, BusServicesByOrigin } from "../types/api.ts";
 
-
-
-async function fetchBusData(url: string, retries = 5, intervalMs = 1000): Promise<BusService[]> {
+async function fetchMultiBusData(url: string, retries = 5, intervalMs = 1000): Promise<BusServicesByOrigin> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     const response = await fetch(url, { method: 'GET' });
     const data = await response.json();
-    if (Array.isArray(data)) {
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
       return data;
     }
     console.warn(`attempt ${attempt}/${retries} failed:`, data);
@@ -18,7 +16,7 @@ async function fetchBusData(url: string, retries = 5, intervalMs = 1000): Promis
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
   }
-  return [];
+  return {};
 }
 
 function NextBusesList() {
@@ -33,13 +31,12 @@ function NextBusesList() {
       }
       try {
         const baseUrl = import.meta.env.VITE_BACKEND_URL || '';
-        const [piroData, numaData] = await Promise.all([
-          fetchBusData(baseUrl + '/api/trips?origin=22030_2&destination=51240_'),
-          fetchBusData(baseUrl + '/api/trips?origin=24140_1&destination=51240_'),
-        ]);
-        console.log(piroData, numaData);
-        setPiroData(piroData);
-        setNumaData(numaData);
+        const result = await fetchMultiBusData(
+          baseUrl + '/api/trips?origin=22030_2,24140_1&destination=51240_'
+        );
+        console.log(result);
+        setPiroData(result['22030_2'] ?? []);
+        setNumaData(result['24140_1'] ?? []);
       } catch (error) {
         console.error('データの取得中にエラーが発生しました:', error);
       } finally {

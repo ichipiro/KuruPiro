@@ -6,3 +6,7 @@ export type BusService = {
   trip_short_id: string;
   remaining_time: string;
 };
+
+export type BusServicesByOrigin = {
+  [originId: string]: BusService[];
+};

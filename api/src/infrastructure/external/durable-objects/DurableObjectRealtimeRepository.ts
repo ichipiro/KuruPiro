@@ -8,6 +8,7 @@ import { Env, CachedRealtimeData } from '@/types';
  */
 export class DurableObjectRealtimeRepository implements IRealtimeRepository {
   private stub: DurableObjectStub;
+  private cachedTripUpdates: Promise<TripUpdate[]> | null = null;
 
   constructor(env: Env) {
     // Use a fixed ID for the singleton Durable Object
@@ -16,11 +17,15 @@ export class DurableObjectRealtimeRepository implements IRealtimeRepository {
   }
 
   /**
-   * 全てのトリップ更新情報を取得
+   * 全てのトリップ更新情報を取得（リクエストスコープでキャッシュ）
    */
   async getAllTripUpdates(): Promise<TripUpdate[]> {
-    const data = await this.fetchRealtimeData();
-    return data.tripUpdates.map((raw) => this.mapToTripUpdate(raw));
+    if (!this.cachedTripUpdates) {
+      this.cachedTripUpdates = this.fetchRealtimeData().then((data) =>
+        data.tripUpdates.map((raw) => this.mapToTripUpdate(raw))
+      );
+    }
+    return this.cachedTripUpdates;
   }
 
   /**

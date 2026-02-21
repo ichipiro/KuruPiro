@@ -116,6 +116,7 @@ app.get('/api/debug/realtime/:trip_id', async (c) => {
 });
 
 app.get('/api/trips', BusController.getTrips);
+app.post('/api/trips/batch', BusController.batchTrips);
 app.get('/api/stops/:stop_id', StopController.getStopInfo);
 
 // グローバルエラーハンドラー

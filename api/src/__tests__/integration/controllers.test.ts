@@ -168,6 +168,106 @@ describe('Controllers Integration Tests', () => {
     });
   });
 
+  describe('BusController.batchTrips', () => {
+    it('should return array of arrays for each query', async () => {
+      app.post('/api/trips/batch', async (c) => {
+        c.set('factory', mockFactory);
+        return await BusController.batchTrips(c);
+      });
+
+      const response = await app.request('/api/trips/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([
+          { origin: '22030_2', destination: '51240_', limit: 5 },
+          { origin: '24140_1', destination: '51240_', via: 'via1', limit: 5 },
+        ]),
+      });
+
+      expect(response.status).toBe(200);
+      const data = (await response.json()) as any[][];
+      expect(Array.isArray(data)).toBe(true);
+      expect(data).toHaveLength(2);
+      expect(Array.isArray(data[0])).toBe(true);
+      expect(Array.isArray(data[1])).toBe(true);
+      expect(data[0][0]).toMatchObject({ trip_id: 'trip1', trip_short_id: '1' });
+    });
+
+    it('should return 400 for non-array body', async () => {
+      app.post('/api/trips/batch', async (c) => {
+        c.set('factory', mockFactory);
+        return await BusController.batchTrips(c);
+      });
+
+      const response = await app.request('/api/trips/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origin: '22030_2', destination: '51240_' }),
+      });
+
+      expect(response.status).toBe(400);
+      const data = (await response.json()) as any;
+      expect(data).toHaveProperty('error');
+    });
+
+    it('should return 400 when a query item is missing origin', async () => {
+      app.post('/api/trips/batch', async (c) => {
+        c.set('factory', mockFactory);
+        return await BusController.batchTrips(c);
+      });
+
+      const response = await app.request('/api/trips/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{ destination: '51240_' }]),
+      });
+
+      expect(response.status).toBe(400);
+      const data = (await response.json()) as any;
+      expect(data.error).toContain('queries[0]');
+    });
+
+    it('should apply limit per query', async () => {
+      const multipleBuses = Array.from({ length: 10 }, (_, i) => ({
+        tripId: `trip${i}`,
+        routeShortName: '1',
+        scheduledArrival: '10:30',
+        actualArrival: '10:30',
+        remainingTime: 'あと5分',
+        remainingMinutes: 5,
+        delaySeconds: 0,
+        delayDisplay: '',
+        destinationLabel: '終点',
+        currentLocation: '',
+      }));
+
+      mockFactory = {
+        getFindNextBusesUseCase: vi.fn().mockReturnValue({
+          execute: vi.fn().mockResolvedValue(multipleBuses),
+        }),
+      } as any;
+
+      app.post('/api/trips/batch', async (c) => {
+        c.set('factory', mockFactory);
+        return await BusController.batchTrips(c);
+      });
+
+      const response = await app.request('/api/trips/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([
+          { origin: '22030_2', destination: '51240_', limit: 3 },
+          { origin: '24140_1', destination: '51240_', limit: 2 },
+        ]),
+      });
+
+      expect(response.status).toBe(200);
+      const data = (await response.json()) as any[][];
+      expect(data[0]).toHaveLength(3);
+      expect(data[1]).toHaveLength(2);
+    });
+  });
+
   describe('StopController', () => {
     describe('getStopInfo', () => {
       it('should return stop info successfully', async () => {
