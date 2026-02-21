@@ -47,8 +47,8 @@ export class BusController {
       const factory = c.get('factory') as ServiceFactory;
       const useCase = factory.getFindNextBusesUseCase();
 
-      // 値オブジェクトに変換
-      const originStopId = StopId.fromString(originId);
+      // originはカンマ区切りで複数指定可能
+      const originIds = originId.split(',').map(s => s.trim()).filter(s => s.length > 0);
       // destinationはカンマ区切りで複数指定可能
       const destinationStopIds = destinationId
         .split(',')
@@ -66,29 +66,42 @@ export class BusController {
         }
       }
 
-      // ユースケース実行
+      const toResponseItems = (buses: Awaited<ReturnType<typeof useCase.execute>>): NextBusResponseItem[] =>
+        buses.slice(0, validatedLimit).map((bus) => ({
+          trip_id: bus.tripId,
+          trip_short_id: bus.routeShortName,
+          arrival_time: bus.scheduledArrival,
+          remaining_time: bus.remainingTime,
+          delay: bus.delayDisplay,
+          trip_dest: bus.destinationLabel,
+          current_location: bus.currentLocation,
+        }));
+
+      // 複数origin: 並列実行して { [originId]: [...] } 形式で返す
+      if (originIds.length > 1) {
+        const results = await Promise.all(
+          originIds.map(async (id) => {
+            const buses = await useCase.execute(
+              StopId.fromString(id),
+              destinationStopIds,
+              currentDateTime,
+              viaStopIds
+            );
+            return [id, toResponseItems(buses)] as const;
+          })
+        );
+        return c.json(Object.fromEntries(results));
+      }
+
+      // 単一origin: 既存の配列形式で返す（後方互換）
       const buses = await useCase.execute(
-        originStopId,
+        StopId.fromString(originIds[0]),
         destinationStopIds,
         currentDateTime,
         viaStopIds
       );
 
-      // レスポンスサイズで制限
-      const limitedBuses = buses.slice(0, validatedLimit);
-
-      // レスポンス形式に変換
-      const items: NextBusResponseItem[] = limitedBuses.map((bus) => ({
-        trip_id: bus.tripId,
-        trip_short_id: bus.routeShortName,
-        arrival_time: bus.scheduledArrival,
-        remaining_time: bus.remainingTime,
-        delay: bus.delayDisplay,
-        trip_dest: bus.destinationLabel,
-        current_location: bus.currentLocation,
-      }));
-
-      return c.json(items);
+      return c.json(toResponseItems(buses));
     } catch (error) {
       console.error('Error in BusController.getTrips:', error);
       const message = error instanceof Error ? error.message : 'Internal Server Error';

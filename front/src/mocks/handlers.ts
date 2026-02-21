@@ -7,7 +7,9 @@ export const handlers = [
     const url = new URL(request.url);
     const origin = url.searchParams.get('origin');
 
-    if (origin === '22030_2') {
+    if (origin === '22030_2,24140_1') {
+      return HttpResponse.json({ '22030_2': normalPiroData, '24140_1': normalNumaData })
+    } else if (origin === '22030_2') {
       return HttpResponse.json(normalPiroData)
     } else if (origin === '24140_1') {
       return HttpResponse.json(normalNumaData)
