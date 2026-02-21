@@ -99,7 +99,7 @@ export class TripUpdate {
   }
 
   get stopTimeUpdates(): StopTimeUpdate[] {
-    return [...this._stopTimeUpdates];
+    return this._stopTimeUpdates;
   }
 
   /**

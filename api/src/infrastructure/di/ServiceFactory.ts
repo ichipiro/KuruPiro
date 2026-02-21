@@ -93,10 +93,7 @@ export class ServiceFactory {
 
   getFindTripsQuery(): FindTripsQuery {
     if (!this.findTripsQuery) {
-      this.findTripsQuery = new FindTripsQuery(
-        this.env.DB,
-        this.getRealtimeRepository()
-      );
+      this.findTripsQuery = new FindTripsQuery(this.env.DB);
     }
     return this.findTripsQuery;
   }
