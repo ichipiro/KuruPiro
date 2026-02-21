@@ -106,7 +106,11 @@ describe('Controllers Integration Tests', () => {
 
         mockFactory = {
           getFindNextBusesUseCase: vi.fn().mockReturnValue({
-            execute: vi.fn().mockResolvedValue(multipleBuses),
+            // limit はユースケースが適用する責務なので、引数を尊重するモックにする
+            execute: vi.fn().mockImplementation(
+              async (_origin: unknown, _dest: unknown, _time: unknown, _via: unknown, limit?: number) =>
+                multipleBuses.slice(0, limit ?? multipleBuses.length)
+            ),
           }),
         } as any;
 
@@ -243,7 +247,11 @@ describe('Controllers Integration Tests', () => {
 
       mockFactory = {
         getFindNextBusesUseCase: vi.fn().mockReturnValue({
-          execute: vi.fn().mockResolvedValue(multipleBuses),
+          // limit はユースケースが適用する責務なので、引数を尊重するモックにする
+          execute: vi.fn().mockImplementation(
+            async (_origin: unknown, _dest: unknown, _time: unknown, _via: unknown, limit?: number) =>
+              multipleBuses.slice(0, limit ?? multipleBuses.length)
+          ),
         }),
       } as any;
 
@@ -315,6 +323,13 @@ describe('Controllers Integration Tests', () => {
           }),
         } as any;
 
+        // コントローラーは try-catch を持たない。
+        // Hono では route handler の例外は app.onError に到達するため、
+        // 実際の index.ts と同様に onError を登録してエラー処理をテストする。
+        app.onError((err, c) => {
+          const message = err instanceof Error ? err.message : 'Internal Server Error';
+          return c.json({ error: message }, 500);
+        });
         app.get('/api/stops/:stop_id', async (c) => {
           c.set('factory', mockFactory);
           return await StopController.getStopInfo(c);

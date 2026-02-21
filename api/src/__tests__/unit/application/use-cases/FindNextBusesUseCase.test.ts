@@ -6,7 +6,7 @@ import { StopId } from '@/domain/value-objects/identifiers';
 import { JSTDateTime } from '@/domain/value-objects/time';
 import { GTFSTime } from '@/domain/value-objects/time';
 import type { IRealtimeRepository, IStopRepository, IStopTimeRepository } from '@/domain/repositories';
-import type { TripSearchResult } from '@/infrastructure/persistence/queries/FindTripsQuery';
+import type { TripSearchResult } from '@/domain/queries';
 
 describe('FindNextBusesUseCase', () => {
   let useCase: FindNextBusesUseCase;

@@ -35,7 +35,8 @@ export class FindNextBusesUseCase {
     originStopId: StopId,
     destinationStopIds: StopId[],
     currentDateTime: JSTDateTime,
-    viaStopIds?: StopId[]
+    viaStopIds?: StopId[],
+    limit?: number
   ): Promise<NextBusDTO[]> {
     // 1. 各destinationを並列検索
     const tripResultsPerDest = await Promise.all(
@@ -209,7 +210,7 @@ export class FindNextBusesUseCase {
       return aSort - bSort;
     });
 
-    return upcomingBuses;
+    return limit !== undefined ? upcomingBuses.slice(0, limit) : upcomingBuses;
   }
 
   /**
