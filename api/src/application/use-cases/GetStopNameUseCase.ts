@@ -14,18 +14,13 @@ export class GetStopNameUseCase {
    * 停留所名を取得
    *
    * @param stopId 停留所ID
-   * @returns 停留所情報（存在しない場合はundefined）
+   * @returns 停留所情報（存在しない場合は stopName が null）
    */
-  async execute(stopId: StopId): Promise<StopDTO | undefined> {
+  async execute(stopId: StopId): Promise<StopDTO> {
     const stop = await this.stopRepo.findById(stopId);
-
-    if (!stop) {
-      return undefined;
-    }
-
     return {
-      stopId: stop.id.value,
-      stopName: stop.name,
+      stopId: stopId.value,
+      stopName: stop ? stop.name : null,
     };
   }
 }

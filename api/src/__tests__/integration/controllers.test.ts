@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { BusController } from '@/presentation/controllers';
 import { StopController } from '@/presentation/controllers';
 import { ServiceFactory } from '@/infrastructure/di/ServiceFactory';
+import { BadRequestError } from '@/presentation/errors';
 import type { Env } from '@/types';
 
 /**
@@ -19,12 +20,35 @@ describe('Controllers Integration Tests', () => {
   let mockEnv: Env;
   let mockFactory: ServiceFactory;
 
+  const singleBus = {
+    tripId: 'trip1',
+    routeShortName: '1',
+    scheduledArrival: '10:30',
+    actualArrival: '10:35',
+    remainingTime: 'あと5分',
+    remainingMinutes: 5,
+    delaySeconds: 300,
+    delayDisplay: '5分遅れ',
+    destinationLabel: '終点',
+    currentLocation: '',
+    isArrivedInFeed: false,
+  };
+
   beforeEach(() => {
     app = new Hono<{
       Variables: {
         factory: ServiceFactory;
       };
     }>();
+
+    // BadRequestError → 400 をテストでも再現する
+    app.onError((err, c) => {
+      if (err instanceof BadRequestError) {
+        return c.json({ error: err.message }, 400);
+      }
+      const message = err instanceof Error ? err.message : 'Internal Server Error';
+      return c.json({ error: message }, 500);
+    });
 
     // モックEnvの作成
     mockEnv = {
@@ -39,20 +63,11 @@ describe('Controllers Integration Tests', () => {
 
     // ServiceFactoryのモック
     mockFactory = {
-      getFindNextBusesUseCase: vi.fn().mockReturnValue({
-        execute: vi.fn().mockResolvedValue([
-          {
-            tripId: 'trip1',
-            routeShortName: '1',
-            scheduledArrival: '10:30',
-            actualArrival: '10:35',
-            remainingTime: 'あと5分',
-            remainingMinutes: 5,
-            delaySeconds: 300,
-            delayDisplay: '5分遅れ',
-            destinationLabel: '終点',
-          },
-        ]),
+      getGetTripsUseCase: vi.fn().mockReturnValue({
+        execute: vi.fn().mockResolvedValue({ type: 'single', buses: [singleBus] }),
+      }),
+      getBatchTripsUseCase: vi.fn().mockReturnValue({
+        execute: vi.fn().mockResolvedValue([[singleBus]]),
       }),
       getGetStopNameUseCase: vi.fn().mockReturnValue({
         execute: vi.fn().mockResolvedValue({
@@ -102,14 +117,14 @@ describe('Controllers Integration Tests', () => {
           delayDisplay: '',
           destinationLabel: '終点',
           currentLocation: '',
+          isArrivedInFeed: false,
         }));
 
         mockFactory = {
-          getFindNextBusesUseCase: vi.fn().mockReturnValue({
+          getGetTripsUseCase: vi.fn().mockReturnValue({
             // limit はユースケースが適用する責務なので、引数を尊重するモックにする
-            execute: vi.fn().mockImplementation(
-              async (_origin: unknown, _dest: unknown, _time: unknown, _via: unknown, limit?: number) =>
-                multipleBuses.slice(0, limit ?? multipleBuses.length)
+            execute: vi.fn().mockImplementation(async (query: { limit: number }) =>
+              ({ type: 'single', buses: multipleBuses.slice(0, query.limit) })
             ),
           }),
         } as any;
@@ -191,9 +206,8 @@ describe('Controllers Integration Tests', () => {
       expect(response.status).toBe(200);
       const data = (await response.json()) as any[][];
       expect(Array.isArray(data)).toBe(true);
-      expect(data).toHaveLength(2);
+      expect(data).toHaveLength(1); // mockFactory.getBatchTripsUseCase returns [[singleBus]]
       expect(Array.isArray(data[0])).toBe(true);
-      expect(Array.isArray(data[1])).toBe(true);
       expect(data[0][0]).toMatchObject({ trip_id: 'trip1', trip_short_id: '1' });
     });
 
@@ -243,14 +257,15 @@ describe('Controllers Integration Tests', () => {
         delayDisplay: '',
         destinationLabel: '終点',
         currentLocation: '',
+        isArrivedInFeed: false,
       }));
 
       mockFactory = {
-        getFindNextBusesUseCase: vi.fn().mockReturnValue({
+        getBatchTripsUseCase: vi.fn().mockReturnValue({
           // limit はユースケースが適用する責務なので、引数を尊重するモックにする
           execute: vi.fn().mockImplementation(
-            async (_origin: unknown, _dest: unknown, _time: unknown, _via: unknown, limit?: number) =>
-              multipleBuses.slice(0, limit ?? multipleBuses.length)
+            async (queries: Array<{ limit: number }>) =>
+              queries.map((q) => multipleBuses.slice(0, q.limit))
           ),
         }),
       } as any;
@@ -297,7 +312,7 @@ describe('Controllers Integration Tests', () => {
       it('should return null for non-existent stop', async () => {
         mockFactory = {
           getGetStopNameUseCase: vi.fn().mockReturnValue({
-            execute: vi.fn().mockResolvedValue(undefined),
+            execute: vi.fn().mockResolvedValue({ stopId: 'unknown', stopName: null }),
           }),
         } as any;
 
@@ -323,13 +338,6 @@ describe('Controllers Integration Tests', () => {
           }),
         } as any;
 
-        // コントローラーは try-catch を持たない。
-        // Hono では route handler の例外は app.onError に到達するため、
-        // 実際の index.ts と同様に onError を登録してエラー処理をテストする。
-        app.onError((err, c) => {
-          const message = err instanceof Error ? err.message : 'Internal Server Error';
-          return c.json({ error: message }, 500);
-        });
         app.get('/api/stops/:stop_id', async (c) => {
           c.set('factory', mockFactory);
           return await StopController.getStopInfo(c);

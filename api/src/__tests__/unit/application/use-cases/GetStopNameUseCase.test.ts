@@ -33,14 +33,14 @@ describe('GetStopNameUseCase', () => {
       expect(mockStopRepo.findById).toHaveBeenCalledWith(stopId);
     });
 
-    it('should return undefined when stop does not exist', async () => {
+    it('should return stopName null when stop does not exist', async () => {
       const stopId = StopId.fromString('unknown_stop');
 
       vi.mocked(mockStopRepo.findById).mockResolvedValue(undefined);
 
       const result = await useCase.execute(stopId);
 
-      expect(result).toBeUndefined();
+      expect(result).toEqual({ stopId: 'unknown_stop', stopName: null });
       expect(mockStopRepo.findById).toHaveBeenCalledWith(stopId);
     });
 

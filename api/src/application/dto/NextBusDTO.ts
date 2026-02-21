@@ -72,9 +72,9 @@ export interface StopDTO {
   stopId: string;
 
   /**
-   * 停留所名
+   * 停留所名（存在しない場合は null）
    */
-  stopName: string;
+  stopName: string | null;
 }
 
 /**
