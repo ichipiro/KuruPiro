@@ -20,8 +20,6 @@ type UseBusDataReturn = {
   error: Error | undefined;
 }
 
-const fetcher = (url: string) => fetch(url).then(res => res.json())
-
 // 経由を判定（trip_short_idで判断）
 // 西風新都線エリアのバス番号:
 //   奇数(61, 63, 65): 横川駅前経由
@@ -62,18 +60,34 @@ function calculateRemainingSeconds(targetTime: string, japanDate: Date): number 
   return Math.floor(diffMs / 1000)
 }
 
-export function useBusData(stopId: string, destination: string = '51240_'): UseBusDataReturn {
-  // limit=8で8本取得し、表示は5本に制限
-  const apiUrl = `${import.meta.env.VITE_BACKEND_URL}/api/trips?origin=${stopId}&destination=${destination}&limit=8`
+// バッチAPIの設定
+// SWRは同じキーのリクエストをデデュプリケートするため、
+// 両停留所のデータを1リクエストで取得できる
+const BATCH_URL = `${import.meta.env.VITE_BACKEND_URL}/api/trips/batch`
+const BATCH_QUERIES = [
+  { origin: '22030_2', destination: '51240_,10_', limit: 8 }, // 市立大学前: 横川駅前経由(51240_) + 中広町経由直行(10_)
+  { origin: '24140_1', destination: '51240_,10_', limit: 8 }, // 沼田料金所前: 横川駅前経由(51240_) + 中広町経由直行(10_)
+]
 
-  const { data: rawData, error, isLoading } = useSWR<BusService[]>(
-    apiUrl,
-    fetcher,
+const batchFetcher = ([url, queries]: [string, typeof BATCH_QUERIES]) =>
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(queries),
+  }).then(res => res.json() as Promise<BusService[][]>)
+
+// バッチ結果の指定インデックスを UseBusDataReturn に変換する共通フック
+function useBatchSlice(index: number): UseBusDataReturn {
+  const { data: batchData, error, isLoading } = useSWR<BusService[][]>(
+    [BATCH_URL, BATCH_QUERIES],
+    batchFetcher,
     {
       refreshInterval: 15 * 1000, // 15秒ごとに更新
       revalidateOnFocus: false,
     }
   )
+
+  const rawData = batchData?.[index]
 
   // 毎秒現在時刻を更新（残り時間の計算用）
   const [currentTime, setCurrentTime] = useState<Date>(() => getJapanDate())
@@ -114,21 +128,15 @@ export function useBusData(stopId: string, destination: string = '51240_'): UseB
       .slice(0, 5)
   }, [rawData, currentTime])
 
-  return {
-    data,
-    isLoading,
-    error,
-  }
+  return { data, isLoading, error }
 }
 
-// 市立大学前 (22030_2)
-// 広島バスセンター行き (51240_)
+// 市立大学前 (22030_2) - バッチ結果の index 0
 export function usePiroBusData(): UseBusDataReturn {
-  return useBusData('22030_2', '51240_')
+  return useBatchSlice(0)
 }
 
-// 沼田料金所前 (24140_1)
-// 広島バスセンター行き (51240_)
+// 沼田料金所前 (24140_1) - バッチ結果の index 1
 export function useNumaBusData(): UseBusDataReturn {
-  return useBusData('24140_1', '51240_')
+  return useBatchSlice(1)
 }
