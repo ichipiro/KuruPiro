@@ -65,8 +65,8 @@ function calculateRemainingSeconds(targetTime: string, japanDate: Date): number 
 // 両停留所のデータを1リクエストで取得できる
 const BATCH_URL = `${import.meta.env.VITE_BACKEND_URL}/api/trips/batch`
 const BATCH_QUERIES = [
-  { origin: '22030_2', destination: '51240_', limit: 8 }, // 市立大学前
-  { origin: '24140_1', destination: '51240_', limit: 8 }, // 沼田料金所前
+  { origin: '22030_2', destination: '51240_,10_', limit: 8 }, // 市立大学前: 横川駅前経由(51240_) + 中広町経由直行(10_)
+  { origin: '24140_1', destination: '51240_,10_', limit: 8 }, // 沼田料金所前: 横川駅前経由(51240_) + 中広町経由直行(10_)
 ]
 
 const batchFetcher = ([url, queries]: [string, typeof BATCH_QUERIES]) =>
