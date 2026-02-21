@@ -9,16 +9,15 @@
 import type { Context, Next } from 'hono';
 import type { Env } from '@/types';
 import { ServiceFactory } from '@/infrastructure/di/ServiceFactory';
+import { BadRequestError } from '@/presentation/errors';
 
-/**
- * グローバルエラーハンドラーミドルウェア
- *
- * すべてのエラーをキャッチして適切なレスポンスを返します。
- */
 export async function errorHandler(c: Context, next: Next): Promise<Response | void> {
   try {
     await next();
   } catch (error) {
+    if (error instanceof BadRequestError) {
+      return c.json({ error: error.message }, 400);
+    }
     console.error('Unhandled error:', error);
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     return c.json({ error: message }, 500);

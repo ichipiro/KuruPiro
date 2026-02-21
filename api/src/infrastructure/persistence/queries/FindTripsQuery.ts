@@ -3,26 +3,16 @@ import { getDBClient } from '@/db/client';
 import { stopTimes, trips, calendar, routes } from '@/db/schema';
 import { StopId } from '@/domain/value-objects/identifiers';
 import { GTFSTime } from '@/domain/value-objects/time';
+import type { IFindTripsQuery, TripSearchResult } from '@/domain/queries';
 
-/**
- * トリップ検索結果の型
- */
-export interface TripSearchResult {
-  tripId: string;
-  arrivalTime: GTFSTime;
-  stopSequence: number;
-  routeShortName: string;
-  destinationStopId: string;
-  destinationLabel: string;
-  serviceId: string;
-}
+export type { TripSearchResult };
 
 /**
  * 複雑なトリップ検索クエリを実行するクラス
  *
  * 出発地と目的地の両方を通過するトリップを検索します。
  */
-export class FindTripsQuery {
+export class FindTripsQuery implements IFindTripsQuery {
   constructor(private readonly d1: D1Database) {}
 
   /**

@@ -9,6 +9,11 @@ import { TripFinderService } from '@/domain/services/TripFinderService';
 import { TimeCalculationService } from '@/domain/services/TimeCalculationService';
 import { FindNextBusesUseCase } from '@/application/use-cases/FindNextBusesUseCase';
 import { GetStopNameUseCase } from '@/application/use-cases/GetStopNameUseCase';
+import { GetTripsUseCase } from '@/application/use-cases/GetTripsUseCase';
+import { BatchTripsUseCase } from '@/application/use-cases/BatchTripsUseCase';
+import { ForceUpdateRealtimeUseCase } from '@/application/use-cases/ForceUpdateRealtimeUseCase';
+import { GetCacheInfoUseCase } from '@/application/use-cases/GetCacheInfoUseCase';
+import { GetRealtimeTripDetailUseCase } from '@/application/use-cases/GetRealtimeTripDetailUseCase';
 import type { IStopRepository } from '@/domain/repositories';
 import type { IRouteRepository } from '@/domain/repositories';
 import type { ITripRepository } from '@/domain/repositories';
@@ -135,5 +140,25 @@ export class ServiceFactory {
 
   getGetStopNameUseCase(): GetStopNameUseCase {
     return new GetStopNameUseCase(this.getStopRepository());
+  }
+
+  getGetTripsUseCase(): GetTripsUseCase {
+    return new GetTripsUseCase(this.getFindNextBusesUseCase());
+  }
+
+  getBatchTripsUseCase(): BatchTripsUseCase {
+    return new BatchTripsUseCase(this.getFindNextBusesUseCase());
+  }
+
+  getForceUpdateRealtimeUseCase(): ForceUpdateRealtimeUseCase {
+    return new ForceUpdateRealtimeUseCase(this.getRealtimeRepository());
+  }
+
+  getGetCacheInfoUseCase(): GetCacheInfoUseCase {
+    return new GetCacheInfoUseCase(this.getRealtimeRepository());
+  }
+
+  getGetRealtimeTripDetailUseCase(): GetRealtimeTripDetailUseCase {
+    return new GetRealtimeTripDetailUseCase(this.getRealtimeRepository());
   }
 }
