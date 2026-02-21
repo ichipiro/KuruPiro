@@ -147,6 +147,93 @@ export class BusController {
   }
 }
 
+export class DebugController {
+  /**
+   * POST /api/debug/update-realtime
+   * リアルタイムデータを強制更新
+   */
+  static async updateRealtime(c: Context): Promise<Response> {
+    try {
+      const factory = c.get('factory') as ServiceFactory;
+      const realtimeRepo = factory.getRealtimeRepository();
+      await realtimeRepo.forceUpdate();
+      return c.json({ status: 'updated', timestamp: Date.now() });
+    } catch (error) {
+      console.error('Failed to update realtime data:', error);
+      return c.json({ error: error instanceof Error ? error.message : 'Update failed' }, 500);
+    }
+  }
+
+  /**
+   * GET /api/debug/cache-info
+   * キャッシュの最終更新時刻と統計情報を取得
+   */
+  static async getCacheInfo(c: Context): Promise<Response> {
+    try {
+      const factory = c.get('factory') as ServiceFactory;
+      const realtimeRepo = factory.getRealtimeRepository();
+      const lastUpdated = await realtimeRepo.getLastUpdatedAt();
+      const allUpdates = await realtimeRepo.getAllTripUpdates();
+
+      const now = Date.now();
+      const ageSeconds = Math.floor((now - lastUpdated) / 1000);
+
+      const includeTripIds = c.req.query('includeTripIds') === 'true';
+
+      return c.json({
+        lastUpdatedAt: new Date(lastUpdated).toISOString(),
+        ageSeconds,
+        totalTrips: allUpdates.length,
+        now: new Date(now).toISOString(),
+        ...(includeTripIds && { tripIds: allUpdates.map((u) => u.tripId.value) }),
+      });
+    } catch (error) {
+      console.error('Failed to get cache info:', error);
+      return c.json({ error: error instanceof Error ? error.message : 'Failed' }, 500);
+    }
+  }
+
+  /**
+   * GET /api/debug/realtime/:trip_id
+   * 特定トリップのリアルタイムデータ詳細を取得
+   */
+  static async getRealtimeDetail(c: Context): Promise<Response> {
+    try {
+      const tripId = c.req.param('trip_id');
+      const factory = c.get('factory') as ServiceFactory;
+      const realtimeRepo = factory.getRealtimeRepository();
+      const allUpdates = await realtimeRepo.getAllTripUpdates();
+
+      const targetUpdate = allUpdates.find((update) => update.tripId.value === tripId);
+
+      if (!targetUpdate) {
+        return c.json({
+          found: false,
+          totalTrips: allUpdates.length,
+          message: `Trip ${tripId} not found in realtime data`,
+        });
+      }
+
+      return c.json({
+        found: true,
+        tripId: targetUpdate.tripId.value,
+        stopTimeUpdates: targetUpdate.stopTimeUpdates.map((update) => ({
+          stopSequence: update.stopSequence,
+          stopId: update.stopId?.value,
+          arrivalDelay: update.arrivalDelay?.toSeconds(),
+          arrivalTime: update.arrivalTime,
+          departureDelay: update.departureDelay?.toSeconds(),
+          departureTime: update.departureTime,
+          representativeDelay: update.getRepresentativeDelay().toSeconds(),
+        })),
+      });
+    } catch (error) {
+      console.error('Failed to get realtime data:', error);
+      return c.json({ error: error instanceof Error ? error.message : 'Failed' }, 500);
+    }
+  }
+}
+
 interface StopNameResponse {
   stop_id: string;
   name: string | null;

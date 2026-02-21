@@ -1,10 +1,7 @@
 import { StopId } from '@/domain/value-objects/identifiers';
 import { JSTDateTime } from '@/domain/value-objects/time';
 import { GTFSTime } from '@/domain/value-objects/time';
-import type {
-  FindTripsQuery,
-  TripSearchResult,
-} from '@/infrastructure/persistence/queries/FindTripsQuery';
+import type { IFindTripsQuery, TripSearchResult } from '@/domain/queries';
 import type { IRealtimeRepository } from '@/domain/repositories';
 
 /**
@@ -15,7 +12,7 @@ import type { IRealtimeRepository } from '@/domain/repositories';
  */
 export class TripFinderService {
   constructor(
-    private readonly query: FindTripsQuery,
+    private readonly query: IFindTripsQuery,
     private readonly realtimeRepo?: IRealtimeRepository
   ) {}
 

@@ -4,7 +4,8 @@ import { TripFinderService } from '@/domain/services/TripFinderService';
 import { TimeCalculationService } from '@/domain/services/TimeCalculationService';
 import type { IRealtimeRepository, IStopRepository, IStopTimeRepository } from '@/domain/repositories';
 import type { NextBusDTO } from '@/application/dto/NextBusDTO';
-import type { TripSearchResult } from '@/infrastructure/persistence/queries/FindTripsQuery';
+import type { TripSearchResult } from '@/domain/queries';
+import type { TripUpdate } from '@/domain/entities/TripUpdate';
 
 /**
  * 次のバスを検索するユースケース
@@ -74,7 +75,7 @@ export class FindNextBusesUseCase {
     }
 
     // 2. リアルタイムデータを一括取得してMapに変換（パフォーマンス最適化）
-    let tripUpdateMap: Map<string, any> | undefined;
+    let tripUpdateMap: Map<string, TripUpdate> | undefined;
     if (this.realtimeRepo) {
       const allTripUpdates = await this.realtimeRepo.getAllTripUpdates();
       tripUpdateMap = new Map(
@@ -220,11 +221,11 @@ export class FindNextBusesUseCase {
    * @returns origin → via1 → via2 → ... → destination の順で通過するトリップのみ
    */
   private async filterByViaStops(
-    tripResults: any[],
+    tripResults: TripSearchResult[],
     originStopId: StopId,
     viaStopIds: StopId[]
-  ): Promise<any[]> {
-    const validTrips: any[] = [];
+  ): Promise<TripSearchResult[]> {
+    const validTrips: TripSearchResult[] = [];
 
     for (const tripResult of tripResults) {
       const tripId = TripId.fromString(tripResult.tripId);

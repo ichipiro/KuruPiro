@@ -1,4 +1,5 @@
-import { Env, TripUpdateEntity, CachedRealtimeData } from './types';
+import type { Env } from './types';
+import type { TripUpdateRaw, CachedRealtimeData } from './infrastructure/external/durable-objects/types';
 import { ProtobufDecoder } from './infrastructure/external/gtfs/ProtobufDecoder';
 
 /**
@@ -116,7 +117,7 @@ export class RealtimeCache implements DurableObject {
   /**
    * Fetch trip updates from GTFS Realtime API
    */
-  private async fetchRealtimeTripUpdates(): Promise<TripUpdateEntity[]> {
+  private async fetchRealtimeTripUpdates(): Promise<TripUpdateRaw[]> {
     // Add cache busting query parameter to prevent Cloudflare from caching
     const cacheBustingUrl = `${this.env.GTFS_REALTIME_URL}?t=${Date.now()}`;
     console.log(`[RealtimeCache] Fetching from: ${cacheBustingUrl}`);

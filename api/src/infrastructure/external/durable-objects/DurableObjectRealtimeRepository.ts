@@ -1,7 +1,8 @@
 import { IRealtimeRepository } from '@/domain/repositories';
 import { TripUpdate, StopTimeUpdate } from '@/domain/entities/TripUpdate';
 import { TripId, StopId, Delay } from '@/domain/value-objects/identifiers';
-import { Env, CachedRealtimeData } from '@/types';
+import type { Env } from '@/types';
+import type { CachedRealtimeData } from './types';
 
 /**
  * Durable Objectを使用したリアルタイムリポジトリの実装
