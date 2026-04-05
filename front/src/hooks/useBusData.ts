@@ -64,9 +64,10 @@ function calculateRemainingSeconds(targetTime: string, japanDate: Date): number 
 // SWRは同じキーのリクエストをデデュプリケートするため、
 // 両停留所のデータを1リクエストで取得できる
 const BATCH_URL = `${import.meta.env.VITE_BACKEND_URL}/api/trips/batch`
+const MAX_BUS_COUNT = 20
 const BATCH_QUERIES = [
-  { origin: '22030_2', destination: '51240_,10_', limit: 8 }, // 市立大学前: 横川駅前経由(51240_) + 中広町経由直行(10_)
-  { origin: '24140_1', destination: '51240_,10_', limit: 8 }, // 沼田料金所前: 横川駅前経由(51240_) + 中広町経由直行(10_)
+  { origin: '22030_2', destination: '51240_,10_', limit: MAX_BUS_COUNT }, // 市立大学前: 横川駅前経由(51240_) + 中広町経由直行(10_)
+  { origin: '24140_1', destination: '51240_,10_', limit: MAX_BUS_COUNT }, // 沼田料金所前: 横川駅前経由(51240_) + 中広町経由直行(10_)
 ]
 
 const batchFetcher = ([url, queries]: [string, typeof BATCH_QUERIES]) =>
@@ -100,7 +101,7 @@ function useBatchSlice(index: number): UseBusDataReturn {
     return () => clearInterval(interval)
   }, [])
 
-  // 残り時間を計算（発車済みのバスは除外、5本に制限）
+  // 残り時間を計算（発車済みのバスは除外、最大件数まで返す）
   const data = useMemo(() => {
     if (!rawData || rawData.length === 0) return []
 
@@ -125,7 +126,7 @@ function useBatchSlice(index: number): UseBusDataReturn {
       })
       .filter(bus => bus.remainingSeconds >= 0)
       .sort((a, b) => a.remainingSeconds - b.remainingSeconds)
-      .slice(0, 5)
+      .slice(0, MAX_BUS_COUNT)
   }, [rawData, currentTime])
 
   return { data, isLoading, error }
