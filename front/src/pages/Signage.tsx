@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import AnimatedBusList from '../components/signage/AnimatedBusList'
 import BusColumn from '../components/signage/Bus-column'
 import BusConnectionLines from '../components/signage/BusConnectionLines'
@@ -8,9 +8,23 @@ import { useWeather } from '../hooks/useWeather'
 import { usePiroBusData, useNumaBusData } from '../hooks/useBusData'
 import '../css/signage.css'
 
-// 画面高さに応じて表示便数を計算
+// 画面向きに応じて表示便数を計算
 function useDisplayCount() {
-  return 4 // 4便固定
+  const [displayCount, setDisplayCount] = useState(4)
+
+  useEffect(() => {
+    const updateDisplayCount = () => {
+      // 縦長表示（高さ > 幅）の場合は多く表示、横長の場合は4便
+      const isPortrait = window.innerHeight > window.innerWidth
+      setDisplayCount(isPortrait ? 12 : 4)
+    }
+
+    updateDisplayCount()
+    window.addEventListener('resize', updateDisplayCount)
+    return () => window.removeEventListener('resize', updateDisplayCount)
+  }, [])
+
+  return displayCount
 }
 
 export default function Signage() {
