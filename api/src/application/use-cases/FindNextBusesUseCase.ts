@@ -94,13 +94,12 @@ export class FindNextBusesUseCase {
       0
     );
 
-    // 4. 各トリップを NextBusDTO に変換
-    const buses = await Promise.all(filteredTripResults.map(async (tripResult) => {
+    // 4. 各トリップを NextBusDTO に変換（停留所名は limit 後にまとめて解決する）
+    const buses = filteredTripResults.map((tripResult) => {
       // リアルタイムデータから遅延情報とUnix timestampを取得
       let delay: Delay | undefined;
       let realtimeArrivalTimestamp: number | undefined;
       let isArrivedInFeed = false; // フィードに存在しない = 到着済み
-      let currentLocation = ''; // デフォルトは空文字列
 
       if (tripUpdateMap) {
         const tripUpdate = tripUpdateMap.get(tripResult.tripId);
@@ -124,15 +123,6 @@ export class FindNextBusesUseCase {
           } else {
             // StopTimeUpdateが見つからない = フィードから削除されている = 到着済み
             isArrivedInFeed = true;
-          }
-
-          // 現在位置を取得
-          const currentStopId = tripUpdate.getCurrentStopId();
-          if (currentStopId) {
-            const stopName = await this.stopRepo.findNameById(currentStopId);
-            if (stopName) {
-              currentLocation = stopName;
-            }
           }
         }
       }
@@ -164,7 +154,6 @@ export class FindNextBusesUseCase {
         currentDateTime
       );
 
-      // DTOに変換
       const dto: NextBusDTO = {
         scheduledArrival: scheduledArrivalTime.toTimeString(),
         actualArrival: actualArrivalTime.toTimeString(),
@@ -175,12 +164,12 @@ export class FindNextBusesUseCase {
         tripId: tripResult.tripId,
         delaySeconds: delay ? delay.toSeconds() : 0,
         delayDisplay: delay ? delay.toDisplayString() : '',
-        isArrivedInFeed, // フィードに存在しない = 到着済み
-        currentLocation, // 現在のバスの位置
+        isArrivedInFeed,
+        currentLocation: '',
       };
 
       return dto;
-    }));
+    });
 
     // 5. 既に到着した便を除外
     const upcomingBuses = buses.filter((bus) => {
@@ -210,7 +199,35 @@ export class FindNextBusesUseCase {
       return aSort - bSort;
     });
 
-    return limit !== undefined ? upcomingBuses.slice(0, limit) : upcomingBuses;
+    const limited =
+      limit !== undefined ? upcomingBuses.slice(0, limit) : upcomingBuses;
+
+    if (tripUpdateMap) {
+      await this.attachCurrentLocations(limited, tripUpdateMap);
+    }
+
+    return limited;
+  }
+
+  /**
+   * 表示する便だけ現在地の停留所名を解決する（D1 の N+1 を避ける）
+   */
+  private async attachCurrentLocations(
+    buses: NextBusDTO[],
+    tripUpdateMap: Map<string, TripUpdate>
+  ): Promise<void> {
+    await Promise.all(
+      buses.map(async (bus) => {
+        const currentStopId = tripUpdateMap.get(bus.tripId)?.getCurrentStopId();
+        if (!currentStopId) {
+          return;
+        }
+        const stopName = await this.stopRepo.findNameById(currentStopId);
+        if (stopName) {
+          bus.currentLocation = stopName;
+        }
+      })
+    );
   }
 
   /**

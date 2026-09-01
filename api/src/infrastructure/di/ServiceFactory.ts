@@ -98,7 +98,7 @@ export class ServiceFactory {
 
   getFindTripsQuery(): FindTripsQuery {
     if (!this.findTripsQuery) {
-      this.findTripsQuery = new FindTripsQuery(this.env.DB);
+      this.findTripsQuery = new FindTripsQuery(this.env.DB, this.env.GTFS_CACHE);
     }
     return this.findTripsQuery;
   }

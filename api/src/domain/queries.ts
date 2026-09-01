@@ -33,8 +33,8 @@ export interface IFindTripsQuery {
   /**
    * 出発地と目的地を通過するトリップを検索
    *
-   * 時刻表ベースの便（currentTime以降）とリアルタイムで遅延中の便（realtimeTripIds）を
-   * 統合して取得します。
+   * 曜日の時刻表を取得し、時刻表ベースの便（currentTime以降）と
+   * リアルタイムで遅延中の便（realtimeTripIds）を統合して返します。
    *
    * @param originStopId 出発地停留所ID
    * @param destinationStopId 目的地停留所ID（末尾に_があるとプレフィックスマッチ）
