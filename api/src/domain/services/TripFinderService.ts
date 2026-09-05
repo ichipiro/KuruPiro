@@ -8,7 +8,7 @@ import type { IRealtimeRepository } from '@/domain/repositories';
  * トリップ検索のドメインサービス
  *
  * 停留所間のトリップ検索ロジックを担当します。
- * リアルタイムデータの有無に応じて適切な検索戦略を選択します。
+ * 曜日ごとの時刻表（キャッシュ可能）を取得し、現在時刻とリアルタイムデータで絞り込みます。
  */
 export class TripFinderService {
   constructor(
@@ -19,10 +19,9 @@ export class TripFinderService {
   /**
    * 出発地と目的地の間を走るトリップを検索
    *
-   * 1. realtimeRepo が存在する場合、getAllTripUpdates()（キャッシュ済み）から
-   *    origin + destination を持つ tripId を JS でフィルタ
-   * 2. findByStopsAndTimeWithRealtime() を1回呼ぶ
-   *    - 時刻表の便（currentTime以降）と遅延中の便（realtimeTripIds）を統合
+   * 1. その曜日の時刻表を1日分取得する（結果はインフラ層でキャッシュされる）
+   * 2. currentTime以降の便に絞る。ただしリアルタイムに存在する便は
+   *    遅延して予定時刻を過ぎている可能性があるため時刻フィルタを免除する
    *
    * @param originStopId 出発地停留所ID
    * @param destinationStopId 目的地停留所ID
@@ -36,38 +35,30 @@ export class TripFinderService {
   ): Promise<TripSearchResult[]> {
     const { weekday, gtfsTime } = this.calculateGTFSParams(currentDateTime);
 
-    let realtimeTripIds: string[] = [];
+    const [timetable, realtimeTripIds] = await Promise.all([
+      this.query.findByStopsAndWeekday(originStopId, destinationStopId, weekday),
+      this.getRealtimeTripIds(),
+    ]);
 
-    if (this.realtimeRepo) {
-      const tripUpdates = await this.realtimeRepo.getAllTripUpdates();
-      const destValue = destinationStopId.value;
-      const isPrefix = destValue.endsWith('_');
-      const destPrefix = isPrefix ? destValue.slice(0, -1) : destValue;
+    return timetable.filter(
+      (trip) =>
+        trip.arrivalTime.compareTo(gtfsTime) >= 0 || realtimeTripIds.has(trip.tripId)
+    );
+  }
 
-      realtimeTripIds = tripUpdates
-        .filter((update) => {
-          const stus = update.stopTimeUpdates;
-          const hasOrigin = stus.some(
-            (stu) => stu.stopId !== undefined && stu.stopId.equals(originStopId)
-          );
-          const hasDest = stus.some((stu) => {
-            if (!stu.stopId) return false;
-            return isPrefix
-              ? stu.stopId.value.startsWith(destPrefix)
-              : stu.stopId.equals(destinationStopId);
-          });
-          return hasOrigin && hasDest;
-        })
-        .map((update) => update.tripId.value);
+  /**
+   * リアルタイムフィードに存在するtripIdの集合を取得
+   *
+   * ここに含まれる便は予定時刻を過ぎていても運行中の可能性があるため、
+   * 時刻による絞り込みから除外します。
+   */
+  private async getRealtimeTripIds(): Promise<Set<string>> {
+    if (!this.realtimeRepo) {
+      return new Set();
     }
 
-    return this.query.findByStopsAndTimeWithRealtime(
-      originStopId,
-      destinationStopId,
-      weekday,
-      gtfsTime,
-      realtimeTripIds
-    );
+    const tripUpdates = await this.realtimeRepo.getAllTripUpdates();
+    return new Set(tripUpdates.map((update) => update.tripId.value));
   }
 
   /**

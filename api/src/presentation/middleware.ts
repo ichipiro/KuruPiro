@@ -32,7 +32,14 @@ export async function errorHandler(c: Context, next: Next): Promise<Response | v
 export function injectServiceFactory() {
   return async (c: Context, next: Next): Promise<void> => {
     const env = c.env as Env;
-    const factory = new ServiceFactory(env);
+    // executionCtx はテスト等の一部環境で参照できないため、取れなければ省略する
+    let executionCtx: ExecutionContext | undefined;
+    try {
+      executionCtx = c.executionCtx;
+    } catch {
+      executionCtx = undefined;
+    }
+    const factory = new ServiceFactory(env, executionCtx);
     c.set('factory', factory);
     await next();
   };

@@ -84,6 +84,13 @@ export class FindNextBusesUseCase {
       );
     }
 
+    // 2.5. 各便の現在位置（停留所名）を1クエリでまとめて取得
+    //      便ごとに findNameById を呼ぶとD1への問い合わせがN+1になるため
+    const currentLocationByTripId = await this.resolveCurrentLocations(
+      filteredTripResults,
+      tripUpdateMap
+    );
+
     // 3. 基準日を一度だけ計算（パフォーマンス最適化）
     const baseDate = JSTDateTime.fromComponents(
       currentDateTime.year,
@@ -95,12 +102,12 @@ export class FindNextBusesUseCase {
     );
 
     // 4. 各トリップを NextBusDTO に変換
-    const buses = await Promise.all(filteredTripResults.map(async (tripResult) => {
+    const buses = filteredTripResults.map((tripResult) => {
       // リアルタイムデータから遅延情報とUnix timestampを取得
       let delay: Delay | undefined;
       let realtimeArrivalTimestamp: number | undefined;
       let isArrivedInFeed = false; // フィードに存在しない = 到着済み
-      let currentLocation = ''; // デフォルトは空文字列
+      const currentLocation = currentLocationByTripId.get(tripResult.tripId) ?? '';
 
       if (tripUpdateMap) {
         const tripUpdate = tripUpdateMap.get(tripResult.tripId);
@@ -124,15 +131,6 @@ export class FindNextBusesUseCase {
           } else {
             // StopTimeUpdateが見つからない = フィードから削除されている = 到着済み
             isArrivedInFeed = true;
-          }
-
-          // 現在位置を取得
-          const currentStopId = tripUpdate.getCurrentStopId();
-          if (currentStopId) {
-            const stopName = await this.stopRepo.findNameById(currentStopId);
-            if (stopName) {
-              currentLocation = stopName;
-            }
           }
         }
       }
@@ -180,7 +178,7 @@ export class FindNextBusesUseCase {
       };
 
       return dto;
-    }));
+    });
 
     // 5. 既に到着した便を除外
     const upcomingBuses = buses.filter((bus) => {
@@ -214,6 +212,52 @@ export class FindNextBusesUseCase {
   }
 
   /**
+   * 各便の現在位置（停留所名）をまとめて解決する
+   *
+   * リアルタイムデータから現在位置の停留所IDを集め、1クエリで名前を引きます。
+   *
+   * @param tripResults トリップ検索結果
+   * @param tripUpdateMap tripId → リアルタイム更新情報
+   * @returns tripId → 停留所名 のMap（現在位置が不明な便は含まない）
+   */
+  private async resolveCurrentLocations(
+    tripResults: TripSearchResult[],
+    tripUpdateMap: Map<string, TripUpdate> | undefined
+  ): Promise<Map<string, string>> {
+    const locations = new Map<string, string>();
+
+    if (!tripUpdateMap) {
+      return locations;
+    }
+
+    // tripId → 現在位置の停留所ID
+    const currentStopIdByTripId = new Map<string, StopId>();
+    for (const tripResult of tripResults) {
+      const currentStopId = tripUpdateMap.get(tripResult.tripId)?.getCurrentStopId();
+      if (currentStopId) {
+        currentStopIdByTripId.set(tripResult.tripId, currentStopId);
+      }
+    }
+
+    if (currentStopIdByTripId.size === 0) {
+      return locations;
+    }
+
+    const stopNames = await this.stopRepo.findNamesByIds([
+      ...currentStopIdByTripId.values(),
+    ]);
+
+    for (const [tripId, stopId] of currentStopIdByTripId) {
+      const stopName = stopNames.get(stopId.value);
+      if (stopName) {
+        locations.set(tripId, stopName);
+      }
+    }
+
+    return locations;
+  }
+
+  /**
    * 経由地を通過するトリップのみにフィルタリング
    *
    * @param tripResults トリップ検索結果
@@ -228,11 +272,14 @@ export class FindNextBusesUseCase {
   ): Promise<TripSearchResult[]> {
     const validTrips: TripSearchResult[] = [];
 
-    for (const tripResult of tripResults) {
-      const tripId = TripId.fromString(tripResult.tripId);
+    // 便ごとに引くとN+1になるため、全便の停車地を1クエリでまとめて取得する
+    const stopTimesByTripId = await this.stopTimeRepo.findByTripIds(
+      tripResults.map((tripResult) => TripId.fromString(tripResult.tripId))
+    );
 
+    for (const tripResult of tripResults) {
       // トリップの全停車地を取得
-      const stopTimes = await this.stopTimeRepo.findByTripId(tripId);
+      const stopTimes = stopTimesByTripId.get(tripResult.tripId) ?? [];
 
       if (stopTimes.length === 0) {
         continue;

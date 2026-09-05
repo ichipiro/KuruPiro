@@ -12,16 +12,29 @@ export const trips = sqliteTable('gtfs_trips', {
 ]);
 
 export const stopTimes = sqliteTable('gtfs_stop_times', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+  // AUTOINCREMENT を外して sqlite_sequence への付随書き込みをなくす（idは使用していない）
+  id: integer('id').primaryKey(),
   tripId: text('trip_id').notNull().references(() => trips.tripId),
   stopId: text('stop_id').notNull(),
   stopSequence: integer('stop_sequence').notNull(),
   arrivalTime: text('arrival_time').notNull(),
   departureTime: text('departure_time').notNull(),
 }, (table) => [
-  index('idx_stop_times_stop_id').on(table.stopId),
-  index('idx_stop_times_trip_id').on(table.tripId),
-  index('idx_stop_times_trip_stop').on(table.tripId, table.stopSequence),
+  // 出発地側の検索用（stop_id で絞り arrival_time 順に取り出す）。
+  // trip_id / stop_sequence まで含めることでカバリングインデックスになる。
+  index('idx_stop_times_stop_arrival').on(
+    table.stopId,
+    table.arrivalTime,
+    table.tripId,
+    table.stopSequence
+  ),
+  // 目的地側の検索用（trip_id + stop_id の範囲シーク）。
+  // trip_id 単独・trip_id + stop_sequence の検索もこのインデックスで賄える。
+  index('idx_stop_times_trip_stop').on(
+    table.tripId,
+    table.stopId,
+    table.stopSequence
+  ),
 ]);
 
 export const routes = sqliteTable('gtfs_routes', {

@@ -1,4 +1,5 @@
 import { FindTripsQuery } from '@/infrastructure/persistence/queries/FindTripsQuery';
+import { CachedFindTripsQuery } from '@/infrastructure/persistence/queries/CachedFindTripsQuery';
 import { DrizzleStopRepository } from '@/infrastructure/persistence/repositories/DrizzleStopRepository';
 import { DrizzleRouteRepository } from '@/infrastructure/persistence/repositories/DrizzleRouteRepository';
 import { DrizzleTripRepository } from '@/infrastructure/persistence/repositories/DrizzleTripRepository';
@@ -20,6 +21,7 @@ import type { ITripRepository } from '@/domain/repositories';
 import type { IStopTimeRepository } from '@/domain/repositories';
 import type { ICalendarRepository } from '@/domain/repositories';
 import type { IRealtimeRepository } from '@/domain/repositories';
+import type { IFindTripsQuery } from '@/domain/queries';
 import type { Env } from '@/types';
 
 /**
@@ -38,13 +40,20 @@ export class ServiceFactory {
   private realtimeRepo?: IRealtimeRepository;
 
   // クエリのキャッシュ
-  private findTripsQuery?: FindTripsQuery;
+  private findTripsQuery?: IFindTripsQuery;
 
   // サービスのキャッシュ
   private tripFinderService?: TripFinderService;
   private timeCalculationService?: TimeCalculationService;
 
-  constructor(private readonly env: Env) {}
+  /**
+   * @param env Cloudflare Workers の環境変数・バインディング
+   * @param ctx 実行コンテキスト。時刻表キャッシュの書き込みを waitUntil に逃がすために使う
+   */
+  constructor(
+    private readonly env: Env,
+    private readonly ctx?: ExecutionContext
+  ) {}
 
   // ========================================
   // リポジトリの取得
@@ -96,9 +105,19 @@ export class ServiceFactory {
   // クエリの取得
   // ========================================
 
-  getFindTripsQuery(): FindTripsQuery {
+  /**
+   * トリップ検索クエリを取得
+   *
+   * 曜日ごとの時刻表はGTFS静的データが更新されるまで変わらないため、
+   * KV（GTFS_CACHE）でラップしてD1への読み取りを削減する。
+   */
+  getFindTripsQuery(): IFindTripsQuery {
     if (!this.findTripsQuery) {
-      this.findTripsQuery = new FindTripsQuery(this.env.DB);
+      this.findTripsQuery = new CachedFindTripsQuery(
+        new FindTripsQuery(this.env.DB),
+        this.env.GTFS_CACHE,
+        this.ctx
+      );
     }
     return this.findTripsQuery;
   }
