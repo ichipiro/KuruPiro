@@ -4,34 +4,35 @@ import { StopId, TripId } from '@/domain/value-objects/identifiers';
 import { JSTDateTime } from '@/domain/value-objects/time';
 import { GTFSTime } from '@/domain/value-objects/time';
 import { TripUpdate, StopTimeUpdate } from '@/domain/entities/TripUpdate';
-import type { FindTripsQuery, TripSearchResult } from '@/infrastructure/persistence/queries/FindTripsQuery';
+import type { IFindTripsQuery, TripSearchResult } from '@/domain/queries';
 import type { IRealtimeRepository } from '@/domain/repositories';
 
 describe('TripFinderService', () => {
   let service: TripFinderService;
-  let mockQuery: FindTripsQuery;
+  let mockQuery: IFindTripsQuery;
   let mockRealtimeRepo: IRealtimeRepository;
 
   const originStopId = StopId.fromString('origin_stop');
   const destinationStopId = StopId.fromString('dest_stop');
 
-  const mockTripResults: TripSearchResult[] = [
-    {
-      tripId: 'trip1',
-      arrivalTime: GTFSTime.fromString('10:00:00'),
-      stopSequence: 5,
-      routeShortName: '1',
-      destinationStopId: 'dest_stop',
-      destinationLabel: '終点',
-      serviceId: 'weekday',
-    },
-  ];
+  /**
+   * 到着時刻とtripIdだけ差し替えた時刻表エントリを作る
+   */
+  const tripResult = (tripId: string, arrivalTime: string): TripSearchResult => ({
+    tripId,
+    arrivalTime: GTFSTime.fromString(arrivalTime),
+    stopSequence: 5,
+    routeShortName: '1',
+    destinationStopId: 'dest_stop',
+    destinationLabel: '終点',
+    serviceId: 'weekday',
+  });
 
   beforeEach(() => {
-    // Mock FindTripsQuery
+    // Mock IFindTripsQuery
     mockQuery = {
-      findByStopsAndTimeWithRealtime: vi.fn(),
-    } as unknown as FindTripsQuery;
+      findByStopsAndWeekday: vi.fn(),
+    };
 
     // Mock IRealtimeRepository
     mockRealtimeRepo = {
@@ -43,50 +44,34 @@ describe('TripFinderService', () => {
   });
 
   describe('findTrips', () => {
-    it('should filter realtimeTripIds by origin and dest, then call findByStopsAndTimeWithRealtime', async () => {
-      // trip1 has both origin and dest → should be included
-      const tripWithBoth = TripUpdate.create(TripId.fromString('trip1'), [
-        StopTimeUpdate.create({ stopId: originStopId }),
-        StopTimeUpdate.create({ stopId: destinationStopId }),
-      ]);
-      // trip2 has only origin → should not be included
-      const tripWithOnlyOrigin = TripUpdate.create(TripId.fromString('trip2'), [
-        StopTimeUpdate.create({ stopId: originStopId }),
-      ]);
-
-      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([
-        tripWithBoth,
-        tripWithOnlyOrigin,
-      ]);
-      vi.mocked(mockQuery.findByStopsAndTimeWithRealtime).mockResolvedValue(mockTripResults);
+    it('should query the timetable by weekday without a time argument', async () => {
+      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([]);
+      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([]);
 
       service = new TripFinderService(mockQuery, mockRealtimeRepo);
 
       const currentDateTime = JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0); // Monday
 
-      const results = await service.findTrips(
-        originStopId,
-        destinationStopId,
-        currentDateTime
-      );
+      await service.findTrips(originStopId, destinationStopId, currentDateTime);
 
       expect(mockRealtimeRepo.getAllTripUpdates).toHaveBeenCalledOnce();
-      expect(mockQuery.findByStopsAndTimeWithRealtime).toHaveBeenCalledWith(
+      expect(mockQuery.findByStopsAndWeekday).toHaveBeenCalledWith(
         originStopId,
         destinationStopId,
-        0, // Monday
-        GTFSTime.fromString('10:00:00'),
-        ['trip1'] // only trip1 has both origin and dest
+        0 // Monday
       );
-      expect(results).toEqual(mockTripResults);
     });
 
-    it('should call findByStopsAndTimeWithRealtime with empty realtimeTripIds when realtimeRepo is not provided', async () => {
-      vi.mocked(mockQuery.findByStopsAndTimeWithRealtime).mockResolvedValue(mockTripResults);
+    it('should keep only trips arriving at or after the current time', async () => {
+      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([
+        tripResult('past', '09:59:00'),
+        tripResult('now', '10:00:00'),
+        tripResult('future', '10:01:00'),
+      ]);
 
       service = new TripFinderService(mockQuery); // No realtime repo
 
-      const currentDateTime = JSTDateTime.fromComponents(2025, 1, 7, 14, 30, 0); // Tuesday
+      const currentDateTime = JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0);
 
       const results = await service.findTrips(
         originStopId,
@@ -94,18 +79,37 @@ describe('TripFinderService', () => {
         currentDateTime
       );
 
-      expect(mockQuery.findByStopsAndTimeWithRealtime).toHaveBeenCalledWith(
+      expect(results.map((r) => r.tripId)).toEqual(['now', 'future']);
+    });
+
+    it('should keep trips that are past their scheduled time but present in realtime', async () => {
+      // 遅延中の便は予定時刻を過ぎていても運行中なので残す
+      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([
+        TripUpdate.create(TripId.fromString('delayed'), [
+          StopTimeUpdate.create({ stopId: originStopId }),
+        ]),
+      ]);
+      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([
+        tripResult('delayed', '09:50:00'),
+        tripResult('gone', '09:51:00'),
+        tripResult('future', '10:30:00'),
+      ]);
+
+      service = new TripFinderService(mockQuery, mockRealtimeRepo);
+
+      const currentDateTime = JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0);
+
+      const results = await service.findTrips(
         originStopId,
         destinationStopId,
-        1, // Tuesday
-        GTFSTime.fromString('14:30:00'),
-        [] // no realtime IDs
+        currentDateTime
       );
-      expect(results).toEqual(mockTripResults);
+
+      expect(results.map((r) => r.tripId)).toEqual(['delayed', 'future']);
     });
 
     it('should correctly calculate weekday (Sunday = 6)', async () => {
-      vi.mocked(mockQuery.findByStopsAndTimeWithRealtime).mockResolvedValue([]);
+      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([]);
 
       service = new TripFinderService(mockQuery);
 
@@ -113,37 +117,41 @@ describe('TripFinderService', () => {
 
       await service.findTrips(originStopId, destinationStopId, currentDateTime);
 
-      expect(mockQuery.findByStopsAndTimeWithRealtime).toHaveBeenCalledWith(
+      expect(mockQuery.findByStopsAndWeekday).toHaveBeenCalledWith(
         originStopId,
         destinationStopId,
-        6, // Sunday
-        GTFSTime.fromString('09:00:00'),
-        []
+        6 // Sunday
       );
     });
 
     it('should handle late-night times (25:30:00 for 01:30 next day)', async () => {
       vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([]);
-      vi.mocked(mockQuery.findByStopsAndTimeWithRealtime).mockResolvedValue([]);
+      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([
+        tripResult('before', '25:29:00'),
+        tripResult('after', '25:31:00'),
+      ]);
 
       service = new TripFinderService(mockQuery, mockRealtimeRepo);
 
       // 1:30 AM on Tuesday (should be treated as Monday 25:30:00 in GTFS)
       const currentDateTime = JSTDateTime.fromComponents(2025, 1, 7, 1, 30, 0);
 
-      await service.findTrips(originStopId, destinationStopId, currentDateTime);
-
-      expect(mockQuery.findByStopsAndTimeWithRealtime).toHaveBeenCalledWith(
+      const results = await service.findTrips(
         originStopId,
         destinationStopId,
-        0, // Monday (because it's considered late Monday night)
-        GTFSTime.fromString('25:30:00'),
-        [] // no matching realtime trips (getAllTripUpdates returned empty)
+        currentDateTime
       );
+
+      expect(mockQuery.findByStopsAndWeekday).toHaveBeenCalledWith(
+        originStopId,
+        destinationStopId,
+        0 // Monday (because it's considered late Monday night)
+      );
+      expect(results.map((r) => r.tripId)).toEqual(['after']);
     });
 
     it('should return empty array when no trips found', async () => {
-      vi.mocked(mockQuery.findByStopsAndTimeWithRealtime).mockResolvedValue([]);
+      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([]);
 
       service = new TripFinderService(mockQuery);
 
@@ -158,38 +166,21 @@ describe('TripFinderService', () => {
       expect(results).toEqual([]);
     });
 
-    it('should handle prefix match for destination stops', async () => {
+    it('should pass the prefix destination through to the query as-is', async () => {
       const prefixDest = StopId.fromString('dest_');
-      const matchingDest1 = StopId.fromString('dest_1');
-      const matchingDest2 = StopId.fromString('dest_2');
 
-      const tripWithPrefixDest1 = TripUpdate.create(TripId.fromString('trip1'), [
-        StopTimeUpdate.create({ stopId: originStopId }),
-        StopTimeUpdate.create({ stopId: matchingDest1 }),
-      ]);
-      const tripWithPrefixDest2 = TripUpdate.create(TripId.fromString('trip2'), [
-        StopTimeUpdate.create({ stopId: originStopId }),
-        StopTimeUpdate.create({ stopId: matchingDest2 }),
-      ]);
+      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([]);
 
-      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([
-        tripWithPrefixDest1,
-        tripWithPrefixDest2,
-      ]);
-      vi.mocked(mockQuery.findByStopsAndTimeWithRealtime).mockResolvedValue(mockTripResults);
-
-      service = new TripFinderService(mockQuery, mockRealtimeRepo);
+      service = new TripFinderService(mockQuery);
 
       const currentDateTime = JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0);
 
       await service.findTrips(originStopId, prefixDest, currentDateTime);
 
-      expect(mockQuery.findByStopsAndTimeWithRealtime).toHaveBeenCalledWith(
+      expect(mockQuery.findByStopsAndWeekday).toHaveBeenCalledWith(
         originStopId,
         prefixDest,
-        0,
-        GTFSTime.fromString('10:00:00'),
-        ['trip1', 'trip2']
+        0
       );
     });
   });

@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { IStopRepository } from '@/domain/repositories';
 import { Stop } from '@/domain/entities/Stop';
 import { StopId } from '@/domain/value-objects/identifiers';
@@ -37,6 +37,31 @@ export class DrizzleStopRepository implements IStopRepository {
   async findNameById(id: StopId): Promise<string> {
     const stop = await this.findById(id);
     return stop?.name ?? '';
+  }
+
+  /**
+   * 複数の停留所名をまとめて検索
+   */
+  async findNamesByIds(ids: StopId[]): Promise<Map<string, string>> {
+    const names = new Map<string, string>();
+
+    const uniqueIds = [...new Set(ids.map((id) => id.value))];
+    if (uniqueIds.length === 0) {
+      return names;
+    }
+
+    const db = getDBClient(this.d1);
+
+    const results = await db
+      .select({ stopId: stops.stopId, stopName: stops.stopName })
+      .from(stops)
+      .where(inArray(stops.stopId, uniqueIds));
+
+    for (const record of results) {
+      names.set(record.stopId, record.stopName);
+    }
+
+    return names;
   }
 
   /**

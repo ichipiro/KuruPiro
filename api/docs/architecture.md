@@ -388,27 +388,75 @@ export class DrizzleTripRepository implements ITripRepository {
 
 **主要クエリ**:
 ```typescript
-// src/infrastructure/persistence/queries/FindTripsQuery.ts
+// src/domain/queries.ts
 export interface IFindTripsQuery {
-  findTrips(
+  // その曜日に出発地→目的地を走る便を1日分まとめて返す
+  findByStopsAndWeekday(
     originStopId: StopId,
     destinationStopId: StopId,
-    afterTime: GTFSTime,
-    serviceIds: ServiceId[]
+    weekday: number
   ): Promise<TripSearchResult[]>;
 }
 
+// src/infrastructure/persistence/queries/FindTripsQuery.ts
 export class FindTripsQuery implements IFindTripsQuery {
-  constructor(private readonly db: DrizzleD1Database) {}
+  constructor(private readonly d1: D1Database) {}
 
-  async findTrips(...): Promise<TripSearchResult[]> {
-    // 複雑なJOINクエリ
-    // - trips, stop_times, routes, calendar テーブルを結合
-    // - 前日・当日・翌日の3日分を検索（24時間超時刻対応）
-    // - 出発地→目的地の順序を検証
+  async findByStopsAndWeekday(...): Promise<TripSearchResult[]> {
+    // gtfs_stop_times を出発地側・目的地側で2回参照するJOINクエリ
+    // - trips, calendar, routes を結合し、曜日で運行便を絞る
+    // - 出発地→目的地の stop_sequence 順序を検証
   }
 }
 ```
+
+現在時刻での絞り込みは `TripFinderService` がJS側で行います。
+クエリを「曜日ごとの時刻表」に限定することで、GTFS静的データが更新されるまで
+結果が変わらなくなり、`CachedFindTripsQuery` でキャッシュできるようになっています。
+
+#### D1使用量の削減
+
+無料プランの上限（読み取り500万行/日・書き込み10万行/日）に収めるため、
+読み書きの両方で行数を抑える設計にしています。
+
+**読み取り**
+
+| 施策 | 内容 |
+| --- | --- |
+| カバリングインデックス | `idx_stop_times_stop_arrival` で出発地側、`idx_stop_times_trip_stop` で目的地側をシークする。目的地のプレフィックスマッチは `LIKE 'xxx%'`（全表走査）ではなく範囲条件にしてインデックスに載せる |
+| 時刻表のキャッシュ | `CachedFindTripsQuery` が KV（`GTFS_CACHE`）に曜日単位で保存する（TTL 1時間）。遅延・残り時間は毎回計算するため表示の鮮度は落ちない。Cache APIは workers.dev 配信では機能しないため使わない |
+| N+1の解消 | 現在位置の停留所名は `findNamesByIds`、経由地フィルタの停車地は `findByTripIds` で1クエリにまとめる |
+
+**書き込み**（`database/scripts/gtfs-sql.mjs` / `build-and-upload-d1.mjs`）
+
+書き込み上限（10万行/日）はハードリミットで、超えるとその日のD1クエリ全体が
+エラーになります。GTFS全体の入れ替えはインデックス書き込み込みで約80万行に
+なるため1日では完走できず、本番の取り込みはステージング方式で数日に分けます。
+
+- ステージング表 `gtfs_*_new` を索引付きで作り、`INSERT OR IGNORE`＋明示IDで冪等に投入する
+- 進捗と当日の書き込み量（レスポンスの `meta.rows_written` 実測値）を `gtfs_metadata` の
+  `import_state` に保存し、日次予算（9万行）に達したら停止して翌日のGitHub Actionsで再開する
+- 全行入ったら旧表を `_old` に退避して `_new` をリネームで昇格する（メタデータ操作なので一瞬）。
+  稼働中の表は完成まで一切触らないため、取り込み中・失敗時も利用者影響がない
+- `gtfs_stop_times.id` は AUTOINCREMENT を使わない（`sqlite_sequence` への付随書き込みをなくす）
+- 複数行 `VALUES` にまとめてD1へのリクエスト数自体も減らす
+- ETagが変わっていなければ取り込み自体をスキップする（強制実行は `FORCE_UPDATE=true`）
+
+フィードの実体は月数回しか更新されないため、平常日の書き込みはほぼ0行です。
+
+**ダイヤ改正の即時反映**（`database/scripts/timetable-kv.mjs`）
+
+配信元は施行前日〜当日にフィードを公開するため、D1の取り込み完了（数日）を
+待つとダイヤ改正が遅れて見えます。これを避けるため:
+
+- Workerはリクエストされた出発地×目的地を `pairs:v1:*`（TTL30日）としてKVに自動記録する
+- 取り込み中のGitHub Actions実行は毎回、記録済みの組み合わせの時刻表をフィードから
+  直接計算し、Workerが読む `timetable:v1:*` キーへTTL30日で配信する（改正は当日反映）
+- D1切り替え完了後に `timetable:v1:*` を全削除し、以降はD1由来の1時間キャッシュに戻る
+
+組み合わせはリクエストから自動学習されるため、フロントの変更に伴う設定メンテは
+不要です。JS計算とSQLの等価性は実フィードで全曜日について検証済み。
+なお、この配信に使うAPIトークンには Workers KV Storage:Edit の権限が必要です。
 
 **設計のポイント**:
 - リポジトリよりも複雑な検索ロジックを分離

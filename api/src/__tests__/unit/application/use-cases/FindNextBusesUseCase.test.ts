@@ -26,11 +26,13 @@ describe('FindNextBusesUseCase', () => {
     mockStopRepo = {
       findById: vi.fn(),
       findNameById: vi.fn().mockResolvedValue('テスト停留所'),
+      findNamesByIds: vi.fn().mockResolvedValue(new Map()),
       findAll: vi.fn(),
     } as unknown as IStopRepository;
 
     mockStopTimeRepo = {
       findByTripId: vi.fn().mockResolvedValue([]),
+      findByTripIds: vi.fn().mockResolvedValue(new Map()),
       findByStopId: vi.fn(),
       findByTripAndStop: vi.fn(),
     } as unknown as IStopTimeRepository;
@@ -228,6 +230,166 @@ describe('FindNextBusesUseCase', () => {
       const result = await useCase.execute(originStopId, [destinationStopId], currentDateTime);
 
       expect(result).toEqual([]);
+    });
+
+    it('should resolve current locations for all trips in a single query', async () => {
+      // 便ごとにD1へ問い合わせず、停留所名は1クエリでまとめて引く
+      const buildTripUpdate = (tripId: string, currentStopId: string) => ({
+        tripId: { value: tripId },
+        stopTimeUpdates: [],
+        findStopTimeUpdate: () => ({
+          stopSequence: 5,
+          getRepresentativeDelay: () => ({
+            toSeconds: () => 0,
+            toDisplayString: () => '',
+            hasDelay: () => false,
+          }),
+          arrivalTime: undefined,
+          departureTime: undefined,
+        }),
+        getCurrentStopId: () => StopId.fromString(currentStopId),
+        getCurrentStopSequence: () => 4,
+      });
+
+      const mockResults: TripSearchResult[] = ['trip1', 'trip2'].map((tripId, i) => ({
+        tripId,
+        arrivalTime: GTFSTime.fromString(`10:3${i}:00`),
+        stopSequence: 5,
+        routeShortName: '1',
+        destinationStopId: 'dest_stop',
+        destinationLabel: '終点',
+        serviceId: 'weekday',
+      }));
+
+      vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
+      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([
+        buildTripUpdate('trip1', 'stop_a') as any,
+        buildTripUpdate('trip2', 'stop_b') as any,
+      ]);
+      vi.mocked(mockStopRepo.findNamesByIds).mockResolvedValue(
+        new Map([
+          ['stop_a', '停留所A'],
+          ['stop_b', '停留所B'],
+        ])
+      );
+
+      useCase = new FindNextBusesUseCase(
+        mockTripFinder,
+        mockTimeCalculation,
+        mockStopRepo,
+        mockStopTimeRepo,
+        mockRealtimeRepo
+      );
+
+      const result = await useCase.execute(
+        StopId.fromString('origin_stop'),
+        [StopId.fromString('dest_stop')],
+        JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0)
+      );
+
+      expect(mockStopRepo.findNamesByIds).toHaveBeenCalledOnce();
+      expect(mockStopRepo.findNameById).not.toHaveBeenCalled();
+      expect(result.map((bus) => bus.currentLocation)).toEqual(['停留所A', '停留所B']);
+    });
+
+    it('should fetch stop times for all trips in a single query when filtering by via stops', async () => {
+      const buildStopTimes = (tripId: string) =>
+        ['origin_stop', 'via_stop', 'dest_stop'].map((stopId, index) => ({
+          tripId: { value: tripId },
+          stopId: { value: stopId },
+          sequence: index + 1,
+        }));
+
+      const mockResults: TripSearchResult[] = ['trip1', 'trip2'].map((tripId, i) => ({
+        tripId,
+        arrivalTime: GTFSTime.fromString(`10:3${i}:00`),
+        stopSequence: 1,
+        routeShortName: '1',
+        destinationStopId: 'dest_stop',
+        destinationLabel: '終点',
+        serviceId: 'weekday',
+      }));
+
+      vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
+      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([]);
+      vi.mocked(mockStopTimeRepo.findByTripIds).mockResolvedValue(
+        new Map([
+          ['trip1', buildStopTimes('trip1') as any],
+          ['trip2', buildStopTimes('trip2') as any],
+        ])
+      );
+
+      useCase = new FindNextBusesUseCase(
+        mockTripFinder,
+        mockTimeCalculation,
+        mockStopRepo,
+        mockStopTimeRepo,
+        mockRealtimeRepo
+      );
+
+      const result = await useCase.execute(
+        StopId.fromString('origin_stop'),
+        [StopId.fromString('dest_stop')],
+        JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0),
+        [StopId.fromString('via_stop')]
+      );
+
+      expect(mockStopTimeRepo.findByTripIds).toHaveBeenCalledOnce();
+      expect(mockStopTimeRepo.findByTripId).not.toHaveBeenCalled();
+      expect(result.map((bus) => bus.tripId)).toEqual(['trip1', 'trip2']);
+    });
+
+    it('should exclude trips that do not pass the via stop', async () => {
+      const mockResults: TripSearchResult[] = ['trip1', 'trip2'].map((tripId, i) => ({
+        tripId,
+        arrivalTime: GTFSTime.fromString(`10:3${i}:00`),
+        stopSequence: 1,
+        routeShortName: '1',
+        destinationStopId: 'dest_stop',
+        destinationLabel: '終点',
+        serviceId: 'weekday',
+      }));
+
+      vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
+      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([]);
+      vi.mocked(mockStopTimeRepo.findByTripIds).mockResolvedValue(
+        new Map([
+          [
+            'trip1',
+            ['origin_stop', 'via_stop', 'dest_stop'].map((stopId, index) => ({
+              tripId: { value: 'trip1' },
+              stopId: { value: stopId },
+              sequence: index + 1,
+            })) as any,
+          ],
+          // trip2 は経由地を通らない
+          [
+            'trip2',
+            ['origin_stop', 'dest_stop'].map((stopId, index) => ({
+              tripId: { value: 'trip2' },
+              stopId: { value: stopId },
+              sequence: index + 1,
+            })) as any,
+          ],
+        ])
+      );
+
+      useCase = new FindNextBusesUseCase(
+        mockTripFinder,
+        mockTimeCalculation,
+        mockStopRepo,
+        mockStopTimeRepo,
+        mockRealtimeRepo
+      );
+
+      const result = await useCase.execute(
+        StopId.fromString('origin_stop'),
+        [StopId.fromString('dest_stop')],
+        JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0),
+        [StopId.fromString('via_stop')]
+      );
+
+      expect(result.map((bus) => bus.tripId)).toEqual(['trip1']);
     });
 
     it('should work without realtime repository', async () => {

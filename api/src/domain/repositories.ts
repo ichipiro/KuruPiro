@@ -104,6 +104,16 @@ export interface IStopRepository {
    */
   findNameById(id: StopId): Promise<string>;
   /**
+   * 複数の停留所名をまとめて検索
+   *
+   * 便ごとに findNameById を呼ぶとD1への問い合わせがN+1になるため、
+   * 1クエリでまとめて引くための入口。
+   *
+   * @param ids 停留所IDの配列
+   * @returns 停留所ID → 停留所名 のMap（見つからなかったIDはキーを持たない）
+   */
+  findNamesByIds(ids: StopId[]): Promise<Map<string, string>>;
+  /**
    * 全ての停留所を取得
    * @returns 停留所の配列
    */
@@ -121,6 +131,15 @@ export interface IStopTimeRepository {
    * @returns 停車時刻の配列（停車順序順）
    */
   findByTripId(tripId: TripId): Promise<StopTime[]>;
+  /**
+   * 複数のトリップIDの停車時刻をまとめて検索（順序順）
+   *
+   * 経由地フィルタのようにトリップごとに停車地を引く処理でN+1を避けるための入口。
+   *
+   * @param tripIds トリップIDの配列
+   * @returns トリップID → 停車時刻の配列（停車順序順）のMap
+   */
+  findByTripIds(tripIds: TripId[]): Promise<Map<string, StopTime[]>>;
   /**
    * 停留所IDで停車時刻を検索
    * @param stopId 停留所ID

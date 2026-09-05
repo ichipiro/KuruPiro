@@ -29,3 +29,6 @@ dist-ssr
 
 # Temporary SQL files (generated for local development)
 api/database/scripts/temp-import*.sql
+
+# pnpm local store (accidentally committed once)
+.pnpm-store/

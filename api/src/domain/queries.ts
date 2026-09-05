@@ -31,22 +31,21 @@ export interface TripSearchResult {
  */
 export interface IFindTripsQuery {
   /**
-   * 出発地と目的地を通過するトリップを検索
+   * 出発地と目的地を通過するトリップを、その曜日の1日分まとめて取得
    *
-   * 曜日の時刻表を取得し、時刻表ベースの便（currentTime以降）と
-   * リアルタイムで遅延中の便（realtimeTripIds）を統合して返します。
+   * 現在時刻での絞り込みは行いません。曜日ごとの時刻表は
+   * GTFSの静的データが更新されるまで変化しないため、
+   * 呼び出し側でキャッシュでき、D1への読み取りを大幅に削減できます。
+   * 現在時刻・リアルタイム情報による絞り込みは呼び出し側（TripFinderService）が行います。
    *
    * @param originStopId 出発地停留所ID
    * @param destinationStopId 目的地停留所ID（末尾に_があるとプレフィックスマッチ）
    * @param weekday 曜日（0=Monday, 6=Sunday）
-   * @param currentTime 現在時刻（この時刻以降の便のみ）
-   * @param realtimeTripIds リアルタイムで運行中のtripId一覧（時刻フィルタを免除）
+   * @returns 到着時刻順のトリップ検索結果（その曜日の全便）
    */
-  findByStopsAndTimeWithRealtime(
+  findByStopsAndWeekday(
     originStopId: StopId,
     destinationStopId: StopId,
-    weekday: number,
-    currentTime: GTFSTime,
-    realtimeTripIds: string[]
+    weekday: number
   ): Promise<TripSearchResult[]>;
 }

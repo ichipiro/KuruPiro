@@ -1,263 +1,228 @@
 #!/usr/bin/env node
 /**
  * Pre-process GTFS data and upload to Cloudflare D1
- * This runs in GitHub Actions
+ * This runs in GitHub Actions (daily)
+ *
+ * ## 無料プランの書き込み上限との付き合い方
+ * D1無料プランは書き込み10万行/日のハードリミットで、超えるとその日は
+ * クエリ全体がエラーになる。GTFS全体の入れ替えは索引込みで約80万行の
+ * 書き込みになるため、1日では完走できない。
+ *
+ * そこでこのスクリプトは:
+ * - ステージング表（gtfs_*_new）へ、日次予算（WRITE_BUDGET）の範囲内だけ投入する
+ * - 進捗を gtfs_metadata の import_state に保存し、翌日のワークフロー実行で再開する
+ * - 全行入った日にリネームで一括切り替えする（稼働中の表は完成まで無傷）
+ * - 書き込み量はレスポンスの meta.rows_written の実測値で管理する
+ *
+ * フィードが変わらない日はETag一致で何も書かない（従来どおり）。
  */
-import { unzipSync, strFromU8 } from 'fflate';
-import { writeFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { unzipSync } from 'fflate';
+import { randomBytes } from 'crypto';
+import {
+  parseGtfsFiles,
+  generateStagedImport,
+  buildCutoverStatements,
+  buildFinalizeStatements,
+  buildDropOldStatements,
+  escapeSQL,
+} from './gtfs-sql.mjs';
+import {
+  buildTimetables,
+  listRegisteredPairs,
+  pushTimetablesToKV,
+  purgeTimetableCache,
+} from './timetable-kv.mjs';
 
 const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || '19fc1347cce15e26c18cd792616f737c';
 const DATABASE_ID = process.env.CLOUDFLARE_D1_DATABASE_ID || '072a7020-ff60-4958-8def-48017c0df486';
 const API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const GTFS_URL = process.env.GTFS_STATIC_URL || 'https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip';
+/** WorkerのGTFS_CACHEバインディングと同じKV名前空間（時刻表の即時配信先） */
+const KV_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID || '49a3e4dd915c4ba08ba21c20cdf0793c';
+/** ETagが変わっていなくても強制的に取り込み直す（スキーマ変更を反映したいときに使う） */
+const FORCE_UPDATE = process.env.FORCE_UPDATE === 'true';
 
 if (!API_TOKEN) {
   console.error('Error: CLOUDFLARE_API_TOKEN environment variable required');
   process.exit(1);
 }
 
-const WEEKDAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+/**
+ * 1日に使ってよい書き込み行数（無料プランの10万行に対する安全マージン込み）
+ */
+const WRITE_BUDGET = 90_000;
 
-function parseCSV(content) {
-  const rows = [];
-  const lines = content.replace(/\r\n?/g, '\n').split('\n');
-  if (lines.length === 0) return rows;
+/**
+ * 切り替え（リネーム＋ANALYZE＋メタデータ）に取っておく予備
+ */
+const CUTOVER_RESERVE = 5_000;
 
-  const header = splitCsvLine(lines[0]);
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.trim()) continue;
-    const cols = splitCsvLine(line);
-    const row = {};
-    for (let j = 0; j < header.length; j++) {
-      row[header[j]] = cols[j] ?? '';
+/** 1リクエストに詰め込むSQLの上限サイズ（バイト） */
+const MAX_BATCH_BYTES = 1024 * 1024;
+/** 1リクエストに詰め込む文の上限数 */
+const MAX_BATCH_STATEMENTS = 5000;
+
+/**
+ * D1のREST APIでSQLを実行する
+ */
+async function runQuery(sql) {
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/d1/database/${DATABASE_ID}/query`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sql }),
     }
-    rows.push(row);
-  }
-  return rows;
-}
+  );
 
-function splitCsvLine(line) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (inQuotes) {
-      if (char === '"') {
-        if (line[i + 1] === '"') {
-          current += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        current += char;
-      }
-    } else {
-      if (char === ',') {
-        result.push(current);
-        current = '';
-      } else if (char === '"') {
-        inQuotes = true;
-      } else {
-        current += char;
-      }
-    }
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`D1 request failed: ${response.status} ${error}`);
   }
-  result.push(current);
+
+  const result = await response.json();
+  if (!result.success) {
+    throw new Error(`D1 query failed: ${JSON.stringify(result.errors)}`);
+  }
+
   return result;
 }
 
-function toInt(value, fallback = 0) {
-  if (!value) return fallback;
-  const num = parseInt(value, 10);
-  return isNaN(num) ? fallback : num;
+/**
+ * レスポンスから実際に書き込まれた行数を合算する
+ */
+function sumRowsWritten(result) {
+  let total = 0;
+  for (const entry of result.result ?? []) {
+    total += entry?.meta?.rows_written ?? 0;
+  }
+  return total;
 }
 
-function normalizeStopId(stopId) {
-  return stopId.replace(/ /g, '_');
-}
-
-function escapeSQL(str) {
-  if (str === null || str === undefined) return 'NULL';
-  return `'${String(str).replace(/'/g, "''")}'`;
-}
-
-function generateInsertStatements(files) {
-  const text = (filename) => {
-    const file = files[filename];
-    if (!file) throw new Error(`GTFS file missing: ${filename}`);
-    return strFromU8(file);
-  };
-
-  console.log('Parsing GTFS files...');
-  const stopTimesRows = parseCSV(text('stop_times.txt'));
-  const tripsRows = parseCSV(text('trips.txt'));
-  const calendarRows = parseCSV(text('calendar.txt'));
-  const routesRows = parseCSV(text('routes.txt'));
-  const routesJpRows = parseCSV(text('routes_jp.txt'));
-  const stopsRows = parseCSV(text('stops.txt'));
-
-  let sql = '-- Clear existing data\n';
-  sql += 'DELETE FROM gtfs_stop_times;\n';
-  sql += 'DELETE FROM gtfs_trips;\n';
-  sql += 'DELETE FROM gtfs_routes;\n';
-  sql += 'DELETE FROM gtfs_calendar;\n';
-  sql += 'DELETE FROM gtfs_stops;\n';
-  sql += 'DELETE FROM gtfs_metadata;\n\n';
-
-  // Insert stops
-  console.log('Generating stops inserts...');
-  for (const row of stopsRows) {
-    const stopId = normalizeStopId(row['stop_id'] ?? '');
-    const stopName = row['stop_name'] ?? '';
-    if (!stopId) continue;
-    sql += `INSERT INTO gtfs_stops (stop_id, stop_name) VALUES (${escapeSQL(stopId)}, ${escapeSQL(stopName)});\n`;
-  }
-
-  // Insert routes
-  console.log('Generating routes inserts...');
-  const routesMap = {};
-  for (const row of routesRows) {
-    const routeId = row['route_id'];
-    if (!routeId) continue;
-    routesMap[routeId] = {
-      routeId,
-      routeShortName: row['route_short_name'] ?? '',
-      destinationStop: null,
-    };
-  }
-  for (const row of routesJpRows) {
-    const routeId = row['route_id'];
-    if (!routeId) continue;
-    if (routesMap[routeId]) {
-      routesMap[routeId].destinationStop = row['destination_stop'] || null;
-    }
-  }
-  for (const route of Object.values(routesMap)) {
-    sql += `INSERT INTO gtfs_routes (route_id, route_short_name, destination_stop) VALUES (${escapeSQL(route.routeId)}, ${escapeSQL(route.routeShortName)}, ${escapeSQL(route.destinationStop)});\n`;
-  }
-
-  // Insert calendar
-  console.log('Generating calendar inserts...');
-  for (const row of calendarRows) {
-    const serviceId = row['service_id'];
-    if (!serviceId) continue;
-    const weekdays = WEEKDAY_KEYS.map((key) => row[key] === '1' ? 1 : 0);
-    sql += `INSERT INTO gtfs_calendar (service_id, start_date, end_date, monday, tuesday, wednesday, thursday, friday, saturday, sunday) VALUES (${escapeSQL(serviceId)}, ${escapeSQL(row['start_date'])}, ${escapeSQL(row['end_date'])}, ${weekdays.join(', ')});\n`;
-  }
-
-  // Insert trips
-  console.log('Generating trips inserts...');
-  for (const row of tripsRows) {
-    const tripId = row['trip_id'];
-    if (!tripId) continue;
-    const directionId = row['direction_id'] ? toInt(row['direction_id']) : null;
-    sql += `INSERT INTO gtfs_trips (trip_id, route_id, service_id, trip_headsign, direction_id) VALUES (${escapeSQL(tripId)}, ${escapeSQL(row['route_id'])}, ${escapeSQL(row['service_id'])}, ${escapeSQL(row['trip_headsign'] || null)}, ${directionId === null ? 'NULL' : directionId});\n`;
-  }
-
-  // Insert stop_times
-  console.log('Generating stop_times inserts...');
-  for (const row of stopTimesRows) {
-    const tripId = row['trip_id'];
-    if (!tripId) continue;
-    const stopId = normalizeStopId(row['stop_id'] ?? '');
-    const stopSequence = toInt(row['stop_sequence']);
-    const arrivalTime = row['arrival_time'] ?? '00:00:00';
-    const departureTime = row['departure_time'] ?? arrivalTime;
-    sql += `INSERT INTO gtfs_stop_times (trip_id, stop_id, stop_sequence, arrival_time, departure_time) VALUES (${escapeSQL(tripId)}, ${escapeSQL(stopId)}, ${stopSequence}, ${escapeSQL(arrivalTime)}, ${escapeSQL(departureTime)});\n`;
-  }
-
-  // Insert metadata
-  sql += `INSERT INTO gtfs_metadata (key, value, updated_at) VALUES ('last_updated', '${new Date().toISOString()}', ${Date.now()});\n`;
-
-  return sql;
-}
-
-async function uploadToD1(sql) {
-  const tempFile = join(__dirname, 'temp-import.sql');
-  writeFileSync(tempFile, sql);
-
-  console.log('Uploading to D1 via Cloudflare API...');
-
-  // D1のバッチAPIを使用
-  const chunks = [];
-  const statements = sql.split('\n').filter(line => line.trim() && !line.startsWith('--'));
-
-  // 1000行ごとにチャンク分割（D1の制限）
-  const BATCH_SIZE = 1000;
-  for (let i = 0; i < statements.length; i += BATCH_SIZE) {
-    chunks.push(statements.slice(i, i + BATCH_SIZE));
-  }
-
-  console.log(`Uploading ${chunks.length} batches...`);
-
-  for (let i = 0; i < chunks.length; i++) {
-    console.log(`Uploading batch ${i + 1}/${chunks.length}...`);
-    const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/d1/database/${DATABASE_ID}/query`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${API_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sql: chunks[i].join('\n')
-        })
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to upload batch ${i + 1}: ${response.status} ${error}`);
-    }
-
-    const result = await response.json();
-    if (!result.success) {
-      throw new Error(`D1 query failed: ${JSON.stringify(result.errors)}`);
-    }
-  }
-}
-
-async function getCurrentETag() {
+async function getMetadataValue(key) {
   try {
-    const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/d1/database/${DATABASE_ID}/query`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${API_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sql: "SELECT value FROM gtfs_metadata WHERE key = 'gtfs_etag'"
-        })
-      }
+    const result = await runQuery(
+      `SELECT value FROM gtfs_metadata WHERE key = ${escapeSQL(key)}`
     );
-
-    if (!response.ok) {
-      console.log('Could not fetch current ETag (database might be empty)');
-      return null;
-    }
-
-    const result = await response.json();
-    if (result.success && result.result?.[0]?.results?.length > 0) {
-      return result.result[0].results[0].value;
-    }
-    return null;
+    const rows = result.result?.[0]?.results;
+    return rows && rows.length > 0 ? rows[0].value : null;
   } catch (error) {
-    console.log('Error fetching current ETag:', error.message);
+    // テーブル未作成（初回）など
+    console.log(`Could not fetch metadata '${key}':`, error.message);
     return null;
+  }
+}
+
+async function getImportState() {
+  const value = await getMetadataValue('import_state');
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+async function saveImportState(state) {
+  await runQuery(
+    `INSERT INTO gtfs_metadata (key, value, updated_at) VALUES ('import_state', ${escapeSQL(JSON.stringify(state))}, ${Date.now()}) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;`
+  );
+}
+
+/**
+ * DBに存在するテーブル名の集合を取得する
+ */
+async function getExistingTables() {
+  const result = await runQuery(
+    `SELECT name FROM sqlite_master WHERE type = 'table'`
+  );
+  const rows = result.result?.[0]?.results ?? [];
+  return new Set(rows.map((row) => row.name));
+}
+
+/** UTC基準の日付文字列（予算のリセットは 00:00 UTC） */
+function todayUTC() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * 文の配列をサイズ上限でバッチにまとめる
+ */
+function chunkStatements(statements, getSql) {
+  const batches = [];
+  let current = [];
+  let currentBytes = 0;
+
+  for (const statement of statements) {
+    const size = Buffer.byteLength(getSql(statement), 'utf8') + 1;
+    const wouldOverflow =
+      current.length > 0 &&
+      (currentBytes + size > MAX_BATCH_BYTES || current.length >= MAX_BATCH_STATEMENTS);
+
+    if (wouldOverflow) {
+      batches.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+
+    current.push(statement);
+    currentBytes += size;
+  }
+  if (current.length > 0) {
+    batches.push(current);
+  }
+  return batches;
+}
+
+async function downloadFeed() {
+  console.log('Downloading GTFS data...');
+  const response = await fetch(GTFS_URL);
+  if (!response.ok) {
+    throw new Error(`Failed to download GTFS: ${response.status}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  console.log(`Downloaded ${(arrayBuffer.byteLength / 1024 / 1024).toFixed(2)} MB`);
+  console.log('Unzipping...');
+  const files = unzipSync(new Uint8Array(arrayBuffer));
+  console.log(`Extracted ${Object.keys(files).length} files`);
+  return files;
+}
+
+/**
+ * 使用中の組み合わせの新しい時刻表をKVへ即時配信する
+ *
+ * D1の分割取り込み完了（数日）を待たずにダイヤ改正を反映させるための処理。
+ * 失敗しても取り込み自体は続行し、翌日の実行で再試行される。
+ */
+async function pushTimetables(gtfs) {
+  const credentials = { accountId: ACCOUNT_ID, namespaceId: KV_NAMESPACE_ID, apiToken: API_TOKEN };
+  try {
+    const pairs = await listRegisteredPairs(credentials);
+    if (pairs.length === 0) {
+      console.log('No registered stop pairs found in KV. Skipping timetable push.');
+      return;
+    }
+    const entries = buildTimetables(gtfs, pairs);
+    await pushTimetablesToKV(entries, credentials);
+    console.log(`✓ Pushed ${entries.length} timetable entries to KV for ${pairs.length} pairs.`);
+  } catch (error) {
+    console.warn('Warning: KV timetable push failed (will retry on next run):', error.message);
+  }
+}
+
+/**
+ * 切り替え完了後、時刻表キャッシュを破棄して新しいD1から再取得させる
+ */
+async function purgeTimetables() {
+  const credentials = { accountId: ACCOUNT_ID, namespaceId: KV_NAMESPACE_ID, apiToken: API_TOKEN };
+  try {
+    const purged = await purgeTimetableCache(credentials);
+    console.log(`✓ Purged ${purged} timetable cache entries from KV.`);
+  } catch (error) {
+    console.warn('Warning: KV timetable purge failed (entries expire on their own):', error.message);
   }
 }
 
@@ -270,48 +235,148 @@ async function main() {
   }
 
   const newETag = headResponse.headers.get('etag')?.replace(/"/g, '');
-  const lastModified = headResponse.headers.get('last-modified');
   console.log(`Remote ETag: ${newETag}`);
-  console.log(`Last Modified: ${lastModified}`);
+  console.log(`Last Modified: ${headResponse.headers.get('last-modified')}`);
 
-  const currentETag = await getCurrentETag();
+  const currentETag = await getMetadataValue('gtfs_etag');
   console.log(`Current ETag in D1: ${currentETag || 'none'}`);
 
-  if (currentETag === newETag) {
-    console.log('✓ GTFS data unchanged (ETag match). Skipping update.');
-    return;
+  let state = await getImportState();
+
+  // 進行中の取り込みがフィード更新で古くなっていたら破棄してやり直す
+  if (state && state.etag !== newETag) {
+    console.log('In-progress import is for an outdated feed. Restarting.');
+    state = null;
   }
 
-  console.log('GTFS data changed. Downloading and updating D1...');
-
-  // Step 2: Download and process
-  console.log('Downloading GTFS data...');
-  const response = await fetch(GTFS_URL);
-  if (!response.ok) {
-    throw new Error(`Failed to download GTFS: ${response.status}`);
+  if (!state) {
+    // 取り込みは索引込みで数十万行の書き込みになるため、内容が変わって
+    // いなければ必ずスキップする
+    if (currentETag === newETag && !FORCE_UPDATE) {
+      console.log('✓ GTFS data unchanged (ETag match). Skipping update.');
+      return;
+    }
+    if (FORCE_UPDATE) {
+      console.log('FORCE_UPDATE=true: re-importing regardless of ETag');
+    }
+  } else {
+    console.log(`Resuming import: phase=${state.phase}, next=${state.next}`);
   }
 
-  const arrayBuffer = await response.arrayBuffer();
-  console.log(`Downloaded ${(arrayBuffer.byteLength / 1024 / 1024).toFixed(2)} MB`);
+  const files = await downloadFeed();
 
-  console.log('Unzipping...');
-  const files = unzipSync(new Uint8Array(arrayBuffer));
-  console.log(`Extracted ${Object.keys(files).length} files`);
+  // 予算残の計算（実測値ベース、UTCの日付が変わればリセット）
+  let writtenToday = state && state.writtenDate === todayUTC() ? state.writtenToday : 0;
+  const budgetLeft = () => WRITE_BUDGET - writtenToday;
 
-  console.log('Processing GTFS data...');
-  const sql = generateInsertStatements(files);
-  console.log(`Generated ${sql.split('\n').length} SQL statements`);
+  const gtfs = parseGtfsFiles(files);
 
-  // Step 3: Upload to D1
-  await uploadToD1(sql);
+  // Step 2: 使用中の組み合わせの時刻表をKVへ即時配信する
+  // （D1の分割取り込みは数日かかるが、ダイヤ改正はこの時点で反映される。
+  //   取り込み期間中に使われ始めた組み合わせを拾うため、進行中は毎回配信する）
+  if (!state || state.phase === 'inserts') {
+    await pushTimetables(gtfs);
+  }
 
-  // Step 4: Save new ETag
-  console.log('Saving new ETag to D1...');
-  const etagSql = `INSERT INTO gtfs_metadata (key, value, updated_at) VALUES ('gtfs_etag', '${newETag}', ${Date.now()}) ON CONFLICT(key) DO UPDATE SET value = '${newETag}', updated_at = ${Date.now()};`;
-  await uploadToD1(etagSql);
+  // Step 3: ステージングの準備（初回のみ）
+  const suffix = state?.suffix ?? randomBytes(4).toString('hex');
+  const { setup, inserts } = generateStagedImport(gtfs, suffix);
+  console.log(`Import plan: ${inserts.length} insert statements`);
 
-  console.log('✓ Successfully uploaded GTFS data to D1!');
-  console.log(`✓ Updated ETag to: ${newETag}`);
+  if (!state) {
+    console.log('Setting up staging tables...');
+    const setupResult = await runQuery(setup.join('\n'));
+    writtenToday += sumRowsWritten(setupResult);
+
+    state = {
+      etag: newETag,
+      suffix,
+      phase: 'inserts',
+      next: 0,
+      writtenDate: todayUTC(),
+      writtenToday,
+    };
+    await saveImportState(state);
+  }
+
+  // Step 4: 予算内でステージング表に投入する
+  if (state.phase === 'inserts') {
+    const remaining = inserts.slice(state.next);
+    const batches = chunkStatements(remaining, (s) => s.sql);
+    let batchIndex = 0;
+
+    for (const batch of batches) {
+      const batchWeight = batch.reduce((sum, s) => sum + s.weight, 0);
+      if (batchWeight > budgetLeft()) {
+        state.writtenDate = todayUTC();
+        state.writtenToday = writtenToday;
+        await saveImportState(state);
+        console.log(
+          `✋ Daily write budget reached (${writtenToday}/${WRITE_BUDGET} rows). ` +
+            `Progress: ${state.next}/${inserts.length} statements. Will resume on the next run.`
+        );
+        return;
+      }
+
+      batchIndex++;
+      console.log(
+        `Uploading insert batch ${batchIndex}/${batches.length} (${batch.length} statements, ~${batchWeight} writes)...`
+      );
+      const result = await runQuery(batch.map((s) => s.sql).join('\n'));
+      const measured = sumRowsWritten(result);
+      // 冪等な再実行時は実測が小さくなる。概算より実測を信じる
+      writtenToday += measured > 0 ? measured : batchWeight;
+      console.log(`  measured rows_written: ${measured}`);
+
+      state.next += batch.length;
+      state.writtenDate = todayUTC();
+      state.writtenToday = writtenToday;
+      await saveImportState(state);
+    }
+
+    state.phase = 'cutover';
+    await saveImportState(state);
+  }
+
+  // Step 5: 切り替え（リネーム）＋完了処理
+  if (state.phase === 'cutover') {
+    if (budgetLeft() < CUTOVER_RESERVE) {
+      console.log(
+        `✋ Not enough budget left for cutover (${writtenToday}/${WRITE_BUDGET}). Will cut over on the next run.`
+      );
+      await saveImportState({ ...state, writtenDate: todayUTC(), writtenToday });
+      return;
+    }
+
+    const existing = await getExistingTables();
+    // 前回の実行が途中で落ちていても、テーブル単位で残りのリネームだけが生成される
+    const cutover = buildCutoverStatements(existing);
+    if (cutover.length > 0) {
+      console.log('Cutting over: renaming staging tables into place...');
+      await runQuery(cutover.join('\n'));
+    } else {
+      console.log('Staging tables already promoted. Finalizing only.');
+    }
+
+    console.log('Finalizing (ANALYZE + metadata)...');
+    await runQuery(buildFinalizeStatements({ etag: newETag }).join('\n'));
+
+    // 旧表の削除はベストエフォート（失敗しても次回のsetupで掃除される）
+    for (const statement of buildDropOldStatements()) {
+      try {
+        await runQuery(statement);
+      } catch (error) {
+        console.warn(`Warning: cleanup failed (${statement}):`, error.message);
+      }
+    }
+
+    // KVの時刻表キャッシュ（Actionsが配信したものと1時間キャッシュの両方）を
+    // 破棄し、以降のリクエストを新しいD1から再取得させる
+    await purgeTimetables();
+
+    console.log('✓ Successfully uploaded GTFS data to D1!');
+    console.log(`✓ Updated ETag to: ${newETag}`);
+  }
 }
 
 main().catch((error) => {

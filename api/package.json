@@ -8,6 +8,7 @@
     "deploy": "wrangler deploy",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 execute kurupiro-db --local --file=./drizzle/0000_absent_maverick.sql",
+    "db:migrate:indexes:local": "wrangler d1 execute kurupiro-db --local --file=./drizzle/0001_stop_times_covering_indexes.sql",
     "db:migrate:prod": "wrangler d1 execute kurupiro-db --file=./drizzle/0000_absent_maverick.sql",
     "db:push:local": "drizzle-kit push --dialect=sqlite --url=.wrangler/state/v3/d1/miniflare-D1DatabaseObject/kurupiro-db.sqlite",
     "test": "vitest",

@@ -1,11 +1,24 @@
 name: Update GTFS Cache
 
+# GTFSの取り込みはD1無料プランの書き込み上限(10万行/日)に収まるよう
+# 数日に分けて実行される。進捗はD1のgtfs_metadataに保存され、この定期
+# 実行が自動で続きから再開する。フィードが変わらない日は何もしない。
+# 取り込み中も、使用中の停留所組み合わせの時刻表はKVへ即時配信される
+# ため、ダイヤ改正は検知した実行の時点で利用者に反映される。
 on:
-  # Run daily at 3:00 AM JST (18:00 UTC previous day)
   schedule:
+    # 3:00 JST: フィード更新の検知と取り込み開始
     - cron: '0 18 * * *'
+    # 9:10 JST: D1書き込み予算のリセット(00:00 UTC)直後に続きを進め、
+    # 取り込みの所要日数を最短にする
+    - cron: '10 0 * * *'
   # Allow manual trigger
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'ETagが同じでも強制的に取り込み直す（スキーマ変更を反映したいとき）'
+        type: boolean
+        default: false
 
 jobs:
   update-cache:
@@ -33,5 +46,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
           GTFS_STATIC_URL: 'https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip'
+          FORCE_UPDATE: ${{ inputs.force }}
         run: |
           cd api/database && pnpm run update:prod
