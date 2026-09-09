@@ -75,12 +75,13 @@ export class FindNextBusesUseCase {
       }
     }
 
-    // 2. リアルタイムデータを一括取得してMapに変換（パフォーマンス最適化）
+    // 2. 対象の便のリアルタイムデータをまとめて取得
+    //    （フィード全件のパースはCPU制限を圧迫するため、必要な便だけ問い合わせる。
+    //      TripFinderService が同じ便を取得済みなのでDOへの追加往復は発生しない）
     let tripUpdateMap: Map<string, TripUpdate> | undefined;
     if (this.realtimeRepo) {
-      const allTripUpdates = await this.realtimeRepo.getAllTripUpdates();
-      tripUpdateMap = new Map(
-        allTripUpdates.map((update) => [update.tripId.value, update])
+      tripUpdateMap = await this.realtimeRepo.getTripUpdatesForTrips(
+        filteredTripResults.map((trip) => TripId.fromString(trip.tripId))
       );
     }
 

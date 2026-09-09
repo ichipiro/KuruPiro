@@ -39,6 +39,7 @@ describe('FindNextBusesUseCase', () => {
 
     mockRealtimeRepo = {
       getAllTripUpdates: vi.fn().mockResolvedValue([]),
+      getTripUpdatesForTrips: vi.fn().mockResolvedValue(new Map()),
       getTripUpdate: vi.fn(),
       getLastUpdatedAt: vi.fn(),
       forceUpdate: vi.fn(),
@@ -139,7 +140,9 @@ describe('FindNextBusesUseCase', () => {
       };
 
       vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
-      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([mockTripUpdate as any]);
+      vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockResolvedValue(
+        new Map([['trip1', mockTripUpdate as any]])
+      );
       vi.mocked(mockRealtimeRepo.getTripUpdate).mockResolvedValue(mockTripUpdate as any);
 
       useCase = new FindNextBusesUseCase(
@@ -187,7 +190,7 @@ describe('FindNextBusesUseCase', () => {
       ];
 
       vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
-      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([]);
+      vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockResolvedValue(new Map());
       vi.mocked(mockRealtimeRepo.getTripUpdate).mockResolvedValue(undefined);
 
       useCase = new FindNextBusesUseCase(
@@ -262,10 +265,12 @@ describe('FindNextBusesUseCase', () => {
       }));
 
       vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
-      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([
-        buildTripUpdate('trip1', 'stop_a') as any,
-        buildTripUpdate('trip2', 'stop_b') as any,
-      ]);
+      vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockResolvedValue(
+        new Map([
+          ['trip1', buildTripUpdate('trip1', 'stop_a') as any],
+          ['trip2', buildTripUpdate('trip2', 'stop_b') as any],
+        ])
+      );
       vi.mocked(mockStopRepo.findNamesByIds).mockResolvedValue(
         new Map([
           ['stop_a', '停留所A'],
@@ -311,7 +316,7 @@ describe('FindNextBusesUseCase', () => {
       }));
 
       vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
-      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([]);
+      vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockResolvedValue(new Map());
       vi.mocked(mockStopTimeRepo.findByTripIds).mockResolvedValue(
         new Map([
           ['trip1', buildStopTimes('trip1') as any],
@@ -351,7 +356,7 @@ describe('FindNextBusesUseCase', () => {
       }));
 
       vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
-      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([]);
+      vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockResolvedValue(new Map());
       vi.mocked(mockStopTimeRepo.findByTripIds).mockResolvedValue(
         new Map([
           [

@@ -58,6 +58,16 @@ export interface IRealtimeRepository {
    * 指定したトリップIDの更新情報を取得
    */
   getTripUpdate(tripId: TripId): Promise<TripUpdate | undefined>;
+
+  /**
+   * 指定したトリップ群のリアルタイム更新情報を取得
+   *
+   * フィード全件（350KB超）をリクエスト毎に取得・変換するとCPU制限を
+   * 圧迫するため、ホットパスでは必要なトリップだけを問い合わせる。
+   *
+   * @returns tripId文字列 → TripUpdate のMap（フィードに存在するもののみ）
+   */
+  getTripUpdatesForTrips(tripIds: TripId[]): Promise<Map<string, TripUpdate>>;
   /**
    * リアルタイムデータの最終更新時刻を取得（Unix timestamp）
    */
