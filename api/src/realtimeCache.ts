@@ -45,8 +45,19 @@ export class RealtimeCache implements DurableObject {
         }
       }
 
+      // 呼び出し側が既に同じ版を持っていれば本文を送らない。
+      // 350KB超のJSONをWorker側でリクエスト毎にパースするとCPU制限(無料10ms)を
+      // 圧迫するため、フィードが変わったときだけ本文を返す
+      const fetchedAt = data ? String(data.fetchedAt) : '';
+      if (data && url.searchParams.get('since') === fetchedAt) {
+        return new Response(null, {
+          status: 304,
+          headers: { 'X-Fetched-At': fetchedAt },
+        });
+      }
+
       return new Response(JSON.stringify(data), {
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Fetched-At': fetchedAt },
       });
     }
 
