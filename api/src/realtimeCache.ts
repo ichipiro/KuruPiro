@@ -33,18 +33,6 @@ export class RealtimeCache implements DurableObject {
     if (url.pathname === '/data') {
       const data = await this.getCachedData();
 
-      // stale-while-revalidate: キャッシュが古い場合はアラームを即座に再スケジュール
-      if (data) {
-        const ageSeconds = Math.floor((Date.now() - data.fetchedAt) / 1000);
-        if (ageSeconds > this.getUpdateInterval() / 1000) {
-          const currentAlarm = await this.state.storage.getAlarm();
-          if (currentAlarm === null || currentAlarm > Date.now() + 5000) {
-            console.log(`[RealtimeCache] Cache is ${ageSeconds}s old, rescheduling alarm immediately`);
-            await this.state.storage.setAlarm(Date.now() + 1000);
-          }
-        }
-      }
-
       // 呼び出し側が既に同じ版を持っていれば本文を送らない。
       // 350KB超のJSONをWorker側でリクエスト毎にパースするとCPU制限(無料10ms)を
       // 圧迫するため、フィードが変わったときだけ本文を返す
@@ -59,6 +47,23 @@ export class RealtimeCache implements DurableObject {
       return new Response(JSON.stringify(data), {
         headers: { 'Content-Type': 'application/json', 'X-Fetched-At': fetchedAt },
       });
+    }
+
+    // 指定トリップの更新情報だけを返す（ホットパス用）
+    // Workerがフィード全件(350KB超)をパースするとCPU制限を圧迫するため、
+    // 必要なトリップに絞った小さな応答を返す
+    if (url.pathname === '/updates' && request.method === 'POST') {
+      const body = await request.json<{ tripIds?: string[] }>();
+      const wanted = new Set(body?.tripIds ?? []);
+      const data = await this.getCachedData();
+
+      const tripUpdates = data
+        ? data.tripUpdates.filter((update) => wanted.has(update.tripId))
+        : [];
+      return new Response(
+        JSON.stringify({ fetchedAt: data?.fetchedAt ?? Date.now(), tripUpdates }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
     // Force update
@@ -98,6 +103,17 @@ export class RealtimeCache implements DurableObject {
         await this.state.storage.setAlarm(Date.now() + this.getUpdateInterval());
       }
       return (await this.state.storage.get<CachedRealtimeData>('realtimeData')) ?? null;
+    }
+
+    // stale-while-revalidate: キャッシュが古い場合はアラームを即座に再スケジュール
+    // （/data・/updates どちらの経路でも効くようここで行う）
+    const ageSeconds = Math.floor((Date.now() - cachedData.fetchedAt) / 1000);
+    if (ageSeconds > this.getUpdateInterval() / 1000) {
+      const currentAlarm = await this.state.storage.getAlarm();
+      if (currentAlarm === null || currentAlarm > Date.now() + 5000) {
+        console.log(`[RealtimeCache] Cache is ${ageSeconds}s old, rescheduling alarm immediately`);
+        await this.state.storage.setAlarm(Date.now() + 1000);
+      }
     }
 
     console.log(`[RealtimeCache] Returning cached data with ${cachedData.tripUpdates.length} updates`);

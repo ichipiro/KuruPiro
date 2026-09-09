@@ -1,8 +1,9 @@
-import { StopId } from '@/domain/value-objects/identifiers';
+import { StopId, TripId } from '@/domain/value-objects/identifiers';
 import { JSTDateTime } from '@/domain/value-objects/time';
 import { GTFSTime } from '@/domain/value-objects/time';
 import type { IFindTripsQuery, TripSearchResult } from '@/domain/queries';
 import type { IRealtimeRepository } from '@/domain/repositories';
+import type { TripUpdate } from '@/domain/entities/TripUpdate';
 
 /**
  * トリップ検索のドメインサービス
@@ -35,30 +36,37 @@ export class TripFinderService {
   ): Promise<TripSearchResult[]> {
     const { weekday, gtfsTime } = this.calculateGTFSParams(currentDateTime);
 
-    const [timetable, realtimeTripIds] = await Promise.all([
-      this.query.findByStopsAndWeekday(originStopId, destinationStopId, weekday),
-      this.getRealtimeTripIds(),
-    ]);
+    const timetable = await this.query.findByStopsAndWeekday(
+      originStopId,
+      destinationStopId,
+      weekday
+    );
+
+    // リアルタイムフィードに存在する便は予定時刻を過ぎていても運行中の
+    // 可能性があるため、時刻による絞り込みから除外する。
+    // フィード全件ではなく時刻表に載っている便だけを問い合わせることで、
+    // 取得・変換のコストを必要最小限にする（判定結果は全件取得と等価）
+    const realtimeUpdates = await this.getRealtimeUpdates(timetable);
 
     return timetable.filter(
       (trip) =>
-        trip.arrivalTime.compareTo(gtfsTime) >= 0 || realtimeTripIds.has(trip.tripId)
+        trip.arrivalTime.compareTo(gtfsTime) >= 0 || realtimeUpdates.has(trip.tripId)
     );
   }
 
   /**
-   * リアルタイムフィードに存在するtripIdの集合を取得
-   *
-   * ここに含まれる便は予定時刻を過ぎていても運行中の可能性があるため、
-   * 時刻による絞り込みから除外します。
+   * 時刻表に含まれる便のリアルタイム更新情報を取得
    */
-  private async getRealtimeTripIds(): Promise<Set<string>> {
-    if (!this.realtimeRepo) {
-      return new Set();
+  private async getRealtimeUpdates(
+    timetable: TripSearchResult[]
+  ): Promise<Map<string, TripUpdate>> {
+    if (!this.realtimeRepo || timetable.length === 0) {
+      return new Map();
     }
 
-    const tripUpdates = await this.realtimeRepo.getAllTripUpdates();
-    return new Set(tripUpdates.map((update) => update.tripId.value));
+    return this.realtimeRepo.getTripUpdatesForTrips(
+      timetable.map((trip) => TripId.fromString(trip.tripId))
+    );
   }
 
   /**

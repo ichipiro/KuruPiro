@@ -26,8 +26,18 @@ describe('DurableObjectRealtimeRepository', () => {
 
   /** DOスタブ: since がキャッシュ済みの版と一致したら304を返す本物の挙動を再現 */
   const makeEnv = (data: CachedRealtimeData) => {
-    doFetch = vi.fn(async (url: string) => {
+    doFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const parsed = new URL(url);
+      if (parsed.pathname === '/updates') {
+        const wanted = new Set(JSON.parse(String(init?.body)).tripIds as string[]);
+        return new Response(
+          JSON.stringify({
+            fetchedAt: data.fetchedAt,
+            tripUpdates: data.tripUpdates.filter((u) => wanted.has(u.tripId)),
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+      }
       if (parsed.pathname === '/data') {
         if (parsed.searchParams.get('since') === String(data.fetchedAt)) {
           return new Response(null, {
@@ -119,6 +129,36 @@ describe('DurableObjectRealtimeRepository', () => {
     const dataCalls = doFetch.mock.calls.filter(([u]) => String(u).includes('/data'));
     expect(dataCalls).toHaveLength(2);
     expect(String(dataCalls[1][0])).not.toContain('since=');
+  });
+
+  it('should fetch only the requested trips via /updates', async () => {
+    const repo = new DurableObjectRealtimeRepository(env);
+
+    const result = await repo.getTripUpdatesForTrips([
+      TripId.fromString('trip1'),
+      TripId.fromString('unknown'),
+    ]);
+
+    expect([...result.keys()]).toEqual(['trip1']);
+    expect(result.get('trip1')?.findStopTimeUpdate(3)?.getRepresentativeDelay().seconds).toBe(60);
+    const body = JSON.parse(String(doFetch.mock.calls[0][1]?.body));
+    expect(body.tripIds).toEqual(['trip1', 'unknown']);
+  });
+
+  it('should only query the DO for trips not yet resolved in this request', async () => {
+    const repo = new DurableObjectRealtimeRepository(env);
+
+    await repo.getTripUpdatesForTrips([TripId.fromString('trip1'), TripId.fromString('unknown')]);
+    // 既知のIDのみ → DO往復なし
+    const second = await repo.getTripUpdatesForTrips([TripId.fromString('trip1')]);
+    expect(second.get('trip1')).toBeDefined();
+    expect(doFetch).toHaveBeenCalledTimes(1);
+
+    // 新しいIDが混ざったら不足分だけ問い合わせる
+    await repo.getTripUpdatesForTrips([TripId.fromString('trip1'), TripId.fromString('trip2')]);
+    expect(doFetch).toHaveBeenCalledTimes(2);
+    const body = JSON.parse(String(doFetch.mock.calls[1][1]?.body));
+    expect(body.tripIds).toEqual(['trip2']);
   });
 
   it('should return empty updates when the DO has no data yet', async () => {

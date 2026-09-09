@@ -37,6 +37,7 @@ describe('TripFinderService', () => {
     // Mock IRealtimeRepository
     mockRealtimeRepo = {
       getAllTripUpdates: vi.fn(),
+      getTripUpdatesForTrips: vi.fn().mockResolvedValue(new Map()),
       getTripUpdate: vi.fn(),
       getLastUpdatedAt: vi.fn(),
       forceUpdate: vi.fn(),
@@ -45,7 +46,6 @@ describe('TripFinderService', () => {
 
   describe('findTrips', () => {
     it('should query the timetable by weekday without a time argument', async () => {
-      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([]);
       vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([]);
 
       service = new TripFinderService(mockQuery, mockRealtimeRepo);
@@ -54,7 +54,8 @@ describe('TripFinderService', () => {
 
       await service.findTrips(originStopId, destinationStopId, currentDateTime);
 
-      expect(mockRealtimeRepo.getAllTripUpdates).toHaveBeenCalledOnce();
+      // 時刻表が空ならリアルタイムの問い合わせ自体が不要
+      expect(mockRealtimeRepo.getTripUpdatesForTrips).not.toHaveBeenCalled();
       expect(mockQuery.findByStopsAndWeekday).toHaveBeenCalledWith(
         originStopId,
         destinationStopId,
@@ -84,11 +85,16 @@ describe('TripFinderService', () => {
 
     it('should keep trips that are past their scheduled time but present in realtime', async () => {
       // 遅延中の便は予定時刻を過ぎていても運行中なので残す
-      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([
-        TripUpdate.create(TripId.fromString('delayed'), [
-          StopTimeUpdate.create({ stopId: originStopId }),
-        ]),
-      ]);
+      vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockResolvedValue(
+        new Map([
+          [
+            'delayed',
+            TripUpdate.create(TripId.fromString('delayed'), [
+              StopTimeUpdate.create({ stopId: originStopId }),
+            ]),
+          ],
+        ])
+      );
       vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([
         tripResult('delayed', '09:50:00'),
         tripResult('gone', '09:51:00'),
@@ -125,7 +131,7 @@ describe('TripFinderService', () => {
     });
 
     it('should handle late-night times (25:30:00 for 01:30 next day)', async () => {
-      vi.mocked(mockRealtimeRepo.getAllTripUpdates).mockResolvedValue([]);
+      vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockResolvedValue(new Map());
       vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([
         tripResult('before', '25:29:00'),
         tripResult('after', '25:31:00'),

@@ -29,6 +29,11 @@ export function resetRealtimeIsolateCache(): void {
 export class DurableObjectRealtimeRepository implements IRealtimeRepository {
   private stub: DurableObjectStub;
   private loadPromise: Promise<{ fetchedAt: number; tripUpdates: TripUpdate[] }> | null = null;
+  /**
+   * トリップ単位の取得結果のリクエストスコープキャッシュ
+   * （undefined = フィードに存在しないことが確認済み）
+   */
+  private selectiveCache = new Map<string, TripUpdate | undefined>();
 
   constructor(env: Env) {
     // Use a fixed ID for the singleton Durable Object
@@ -59,6 +64,55 @@ export class DurableObjectRealtimeRepository implements IRealtimeRepository {
   }
 
   /**
+   * 指定したトリップ群の更新情報を取得（ホットパス用）
+   *
+   * フィード全件(350KB超)ではなく、必要なトリップだけをDOに問い合わせて
+   * 小さな応答のみパースする。コールドスタートしたisolateでも
+   * CPU制限(無料10ms)内に収まるようにするための経路。
+   * 結果はリクエストスコープで累積キャッシュされ、同じトリップの
+   * 再問い合わせはDO往復なしで返る。
+   */
+  async getTripUpdatesForTrips(tripIds: TripId[]): Promise<Map<string, TripUpdate>> {
+    const result = new Map<string, TripUpdate>();
+    const missing: string[] = [];
+
+    for (const id of new Set(tripIds.map((t) => t.value))) {
+      if (this.selectiveCache.has(id)) {
+        const cached = this.selectiveCache.get(id);
+        if (cached) {
+          result.set(id, cached);
+        }
+      } else {
+        missing.push(id);
+      }
+    }
+
+    if (missing.length > 0) {
+      const response = await this.stub.fetch('https://fake-host/updates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tripIds: missing }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch from Durable Object: ${response.status}`);
+      }
+
+      const data = await response.json<CachedRealtimeData>();
+      const found = new Map(data.tripUpdates.map((raw) => [raw.tripId, raw]));
+      for (const id of missing) {
+        const raw = found.get(id);
+        const mapped = raw ? this.mapToTripUpdate(raw) : undefined;
+        this.selectiveCache.set(id, mapped);
+        if (mapped) {
+          result.set(id, mapped);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * リアルタイムデータを強制更新
    */
   async forceUpdate(): Promise<void> {
@@ -66,6 +120,7 @@ export class DurableObjectRealtimeRepository implements IRealtimeRepository {
     // 次の読み取りで新しいデータを取り直させる
     isolateCache = null;
     this.loadPromise = null;
+    this.selectiveCache.clear();
   }
 
   /**
