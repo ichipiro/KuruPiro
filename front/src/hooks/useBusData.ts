@@ -70,12 +70,48 @@ const BATCH_QUERIES = [
   { origin: '24140_1', destination: '51240_,10_', limit: MAX_BUS_COUNT }, // 沼田料金所前: 横川駅前経由(51240_) + 中広町経由直行(10_)
 ]
 
-const batchFetcher = ([url, queries]: [string, typeof BATCH_QUERIES]) =>
-  fetch(url, {
+// 応答が返らないままの接続でポーリングが止まらないよう必ず打ち切る
+const FETCH_TIMEOUT_MS = 10 * 1000
+
+// 最後にデータ取得に成功した時刻（鮮度ウォッチドッグ用）
+let lastSuccessAt = Date.now()
+
+const batchFetcher = ([url, queries]: [string, typeof BATCH_QUERIES]) => {
+  // AbortSignal.timeout は古いChromiumに無いことがあるため手動で組む
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  return fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(queries),
-  }).then(res => res.json() as Promise<BusService[][]>)
+    signal: controller.signal,
+  })
+    .then(res => {
+      if (!res.ok) {
+        throw new Error(`batch API error: ${res.status}`)
+      }
+      return res.json() as Promise<BusService[][]>
+    })
+    .then(data => {
+      lastSuccessAt = Date.now()
+      return data
+    })
+    .finally(() => clearTimeout(timer))
+}
+
+// 鮮度ウォッチドッグ: 一定時間データ更新に成功していなければページごと再起動する。
+// SWRの内部状態やネットワークスタックがどんな異常に陥っても、
+// リロードで必ず初期状態からやり直せるようにするサイネージ向けの保険。
+// （サーバー側が本当に落ちている場合は約10分間隔のリロードを繰り返すだけで、
+//   PWAのキャッシュにより画面自体は表示され続ける）
+const WATCHDOG_STALE_MS = 10 * 60 * 1000
+if (typeof window !== 'undefined') {
+  setInterval(() => {
+    if (Date.now() - lastSuccessAt > WATCHDOG_STALE_MS) {
+      window.location.reload()
+    }
+  }, 60 * 1000)
+}
 
 // バッチ結果の指定インデックスを UseBusDataReturn に変換する共通フック
 function useBatchSlice(index: number): UseBusDataReturn {
@@ -85,6 +121,11 @@ function useBatchSlice(index: number): UseBusDataReturn {
     {
       refreshInterval: 15 * 1000, // 15秒ごとに更新
       revalidateOnFocus: false,
+      // サイネージは常時表示前提: タブ非表示・オフライン判定でポーリングを
+      // 止めるSWRの既定動作を無効化する（画面ブランクや一時的な回線断で
+      // 更新が止まったまま復帰しない事故を防ぐ）
+      refreshWhenHidden: true,
+      refreshWhenOffline: true,
     }
   )
 
