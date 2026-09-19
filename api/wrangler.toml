@@ -32,7 +32,8 @@ deleted_classes = ["GtfsRealtimeDO"]
 new_sqlite_classes = ["RealtimeCache"]
 
 [triggers]
-crons = ["0 3 * * *"]
+# 2分ごとのウォームアップ（src/index.ts の scheduled を参照）
+crons = ["*/2 * * * *"]
 
 [observability]
 enabled = true
