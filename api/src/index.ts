@@ -57,25 +57,7 @@ export { RealtimeCache } from './realtimeCache';
 // Workerのエクスポート
 export default {
   fetch: app.fetch,
-  /**
-   * 定期ウォームアップ（2分ごと）
-   *
-   * フロントと同じ時刻表リクエストを内部実行して、isolateのJIT・
-   * KVの時刻表キャッシュ・Durable Objectを常に温めておく。
-   * 深夜〜早朝の閑散時間帯はリクエストが途絶えて全isolateがコールドになり、
-   * 初回リクエストが無料プランのCPU制限(10ms)を超えて500になることが
-   * あるため、その窓を塞ぐのが目的。
-   * （GTFSデータの更新はGitHub Actionsが行う。このcronはウォームアップ専用）
-   */
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    const warmupRequest = new Request(
-      'https://warmup.internal/api/trips?origin=22030_2,24140_1&destination=51240_'
-    );
-    ctx.waitUntil(
-      Promise.resolve(app.fetch(warmupRequest, env, ctx))
-        .then((response) => response.arrayBuffer())
-        .then(() => undefined)
-        .catch(() => undefined)
-    );
+  async scheduled(_event: ScheduledEvent, _env: Env, _ctx: ExecutionContext): Promise<void> {
+    // No-op: cronは未使用（GTFSデータの更新はGitHub Actionsが行う）
   },
 };

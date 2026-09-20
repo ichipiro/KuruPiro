@@ -32,8 +32,11 @@ deleted_classes = ["GtfsRealtimeDO"]
 new_sqlite_classes = ["RealtimeCache"]
 
 [triggers]
-# 2分ごとのウォームアップ（src/index.ts の scheduled を参照）
-crons = ["*/2 * * * *"]
+# cronは未使用（空配列で登録解除）。GTFS更新はGitHub Actionsが行う。
+# 過去に2分ごとのウォームアップを試したが、cronはユーザーを担当する
+# コロケーションと別の場所で実行されるため毎回コールド起動になり、
+# ウォームアップ自身がCPU制限超過で死んでエラー計上されるだけだった
+crons = []
 
 [observability]
 enabled = true
