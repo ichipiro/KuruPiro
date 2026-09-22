@@ -74,9 +74,12 @@ export class FindTripsQuery implements IFindTripsQuery {
     const destStops = alias(stopTimes, 'dest_stops');
 
     // 目的地がプレフィックスマッチかどうか
+    // プレフィックスは末尾の `_` を含めて照合する。停留所IDは
+    // 「グループ番号_乗り場番号」形式のため、`_` を削って '10' で前方一致
+    // させると別グループ（1000_1 玖波分れ 等）まで誤マッチしてしまう
     const destValue = destinationStopId.value;
     const isPrefix = destValue.endsWith('_');
-    const destPattern = isPrefix ? destValue.slice(0, -1) : destValue;
+    const destPattern = destValue;
 
     // プレフィックスマッチも範囲条件にしてインデックスシークに乗せる
     const destCondition = isPrefix

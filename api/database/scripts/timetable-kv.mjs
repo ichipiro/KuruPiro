@@ -96,10 +96,11 @@ function buildTimetable(indexes, originStopId, destinationStopId, serviceDate) {
   const { stopTimesByStop, stopTimesByTrip, tripsById, routesById } = indexes;
   const weekday = weekdayOf(serviceDate);
 
+  // プレフィックスは末尾の `_` を含めて照合する（FindTripsQueryと同じ規則。
+  // `_` を削ると '10_' が別グループの '1000_1' 等まで誤マッチする）
   const isPrefix = destinationStopId.endsWith('_');
-  const destPattern = isPrefix ? destinationStopId.slice(0, -1) : destinationStopId;
   const matchesDest = (stopId) =>
-    isPrefix ? stopId.startsWith(destPattern) : stopId === destPattern;
+    isPrefix ? stopId.startsWith(destinationStopId) : stopId === destinationStopId;
 
   const rows = [];
   for (const origin of stopTimesByStop.get(originStopId) ?? []) {
