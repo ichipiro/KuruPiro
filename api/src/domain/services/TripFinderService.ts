@@ -64,9 +64,16 @@ export class TripFinderService {
       return new Map();
     }
 
-    return this.realtimeRepo.getTripUpdatesForTrips(
-      timetable.map((trip) => TripId.fromString(trip.tripId))
-    );
+    try {
+      return await this.realtimeRepo.getTripUpdatesForTrips(
+        timetable.map((trip) => TripId.fromString(trip.tripId))
+      );
+    } catch (error) {
+      // リアルタイムは補助データ: 取得に失敗しても時刻表ベースの
+      // 結果は返せるため、リクエスト全体を失敗させない
+      console.warn('Realtime updates unavailable, falling back to timetable only:', error);
+      return new Map();
+    }
   }
 
   /**
