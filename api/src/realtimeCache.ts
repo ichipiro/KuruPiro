@@ -148,7 +148,13 @@ export class RealtimeCache implements DurableObject {
     // Add cache busting query parameter to prevent Cloudflare from caching
     const cacheBustingUrl = `${this.env.GTFS_REALTIME_URL}?t=${Date.now()}`;
     console.log(`[RealtimeCache] Fetching from: ${cacheBustingUrl}`);
-    const response = await fetch(cacheBustingUrl);
+    // 配信元が応答しない場合に呼び出し元(alarm/初回リクエスト)ごと
+    // 固まらないよう必ず打ち切る。失敗時は既存キャッシュが使われ続ける
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    const response = await fetch(cacheBustingUrl, { signal: controller.signal }).finally(() =>
+      clearTimeout(timer)
+    );
     if (!response.ok) {
       throw new Error(`Failed to fetch realtime data: ${response.status}`);
     }

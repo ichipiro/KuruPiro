@@ -394,7 +394,10 @@ export class JSTDateTime {
    * JavaScriptのgetDay()とは異なり、月曜日を0とします（GTFS仕様に合わせる）
    */
   getWeekday(): number {
-    const day = this.date.getDay(); // 0=日曜日, 1=月曜日, ..., 6=土曜日
+    // 実行環境のタイムゾーンに依存しないよう、JSTビューのUTC getterで読む。
+    // 以前は date.getDay()（ローカルTZ）を使っており、UTCで動く本番Workerでは
+    // JST 0時〜9時の間に前日の曜日を返すバグがあった
+    const day = this.jstView.getUTCDay(); // 0=日曜日, 1=月曜日, ..., 6=土曜日
     return (day + 6) % 7; // 0=月曜日, 1=火曜日, ..., 6=日曜日 に変換
   }
 
@@ -477,45 +480,58 @@ export class JSTDateTime {
   }
 
   /**
+   * JSTの各成分をUTC getterで読むためのビュー（エポック+9時間）
+   *
+   * JSTは夏時間がないため固定オフセットの算術で正確に求まる。
+   * 以前は各getterで toLocaleString('ja-JP', {timeZone:'Asia/Tokyo'}) を
+   * 使っていたが、これは内部でIntl.DateTimeFormatを毎回生成するため
+   * 1呼び出しで数百μs〜数msかかり、リクエスト1件の時刻計算だけで
+   * 数十msのCPUを消費してWorkerのCPU制限超過の主因になっていた
+   */
+  private get jstView(): Date {
+    return new Date(this.date.getTime() + 9 * 60 * 60 * 1000);
+  }
+
+  /**
    * JSTの年を取得
    */
   get year(): number {
-    return parseInt(this.date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric' }), 10);
+    return this.jstView.getUTCFullYear();
   }
 
   /**
    * JSTの月を取得（1-12）
    */
   get month(): number {
-    return parseInt(this.date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric' }), 10);
+    return this.jstView.getUTCMonth() + 1;
   }
 
   /**
    * JSTの日を取得（1-31）
    */
   get day(): number {
-    return parseInt(this.date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', day: 'numeric' }), 10);
+    return this.jstView.getUTCDate();
   }
 
   /**
    * JSTの時を取得（0-23）
    */
   get hour(): number {
-    return parseInt(this.date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour: 'numeric', hour12: false }), 10);
+    return this.jstView.getUTCHours();
   }
 
   /**
    * JSTの分を取得（0-59）
    */
   get minute(): number {
-    return parseInt(this.date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', minute: 'numeric' }), 10);
+    return this.jstView.getUTCMinutes();
   }
 
   /**
    * JSTの秒を取得（0-59）
    */
   get second(): number {
-    return parseInt(this.date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', second: 'numeric' }), 10);
+    return this.jstView.getUTCSeconds();
   }
 }
 
