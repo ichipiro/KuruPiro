@@ -50,6 +50,7 @@ export const GTFS_TABLES = [
   'gtfs_trips',
   'gtfs_routes',
   'gtfs_calendar',
+  'gtfs_calendar_dates',
   'gtfs_stops',
 ];
 
@@ -65,6 +66,7 @@ export const WRITE_MULTIPLIERS = {
   gtfs_stop_times: 3, // 本体 + idx_stop_arrival + idx_trip_stop（PKはrowidなので加算なし）
   gtfs_routes: 2,
   gtfs_calendar: 2,
+  gtfs_calendar_dates: 2, // 本体 + 複合PK索引
   gtfs_stops: 2,
 };
 
@@ -79,6 +81,7 @@ function createTableStatements(suffix = '') {
     `CREATE TABLE gtfs_stop_times${suffix} (id integer PRIMARY KEY NOT NULL, trip_id text NOT NULL, stop_id text NOT NULL, stop_sequence integer NOT NULL, arrival_time text NOT NULL, departure_time text NOT NULL, FOREIGN KEY (trip_id) REFERENCES gtfs_trips${suffix}(trip_id) ON UPDATE no action ON DELETE no action);`,
     `CREATE TABLE gtfs_routes${suffix} (route_id text PRIMARY KEY NOT NULL, route_short_name text NOT NULL, destination_stop text);`,
     `CREATE TABLE gtfs_calendar${suffix} (service_id text PRIMARY KEY NOT NULL, start_date text NOT NULL, end_date text NOT NULL, monday integer NOT NULL, tuesday integer NOT NULL, wednesday integer NOT NULL, thursday integer NOT NULL, friday integer NOT NULL, saturday integer NOT NULL, sunday integer NOT NULL);`,
+    `CREATE TABLE gtfs_calendar_dates${suffix} (service_id text NOT NULL, date text NOT NULL, exception_type integer NOT NULL, PRIMARY KEY(service_id, date));`,
     `CREATE TABLE gtfs_stops${suffix} (stop_id text PRIMARY KEY NOT NULL, stop_name text NOT NULL);`,
   ];
 }
@@ -184,6 +187,10 @@ export function parseGtfsFiles(files) {
   const stopTimesRows = parseCSV(text('stop_times.txt'));
   const tripsRows = parseCSV(text('trips.txt'));
   const calendarRows = parseCSV(text('calendar.txt'));
+  // calendar_dates.txt（祝日などの運行例外）は存在しないフィードもある
+  const calendarDatesRows = files['calendar_dates.txt']
+    ? parseCSV(strFromU8(files['calendar_dates.txt']))
+    : [];
   const routesRows = parseCSV(text('routes.txt'));
   const routesJpRows = parseCSV(text('routes_jp.txt'));
   const stopsRows = parseCSV(text('stops.txt'));
@@ -258,7 +265,16 @@ export function parseGtfsFiles(files) {
     });
   }
 
-  return { trips, stopTimes, stops, routes, calendar };
+  const calendarDates = [];
+  for (const row of calendarDatesRows) {
+    const serviceId = row['service_id'];
+    const date = row['date'];
+    const exceptionType = toInt(row['exception_type']);
+    if (!serviceId || !date || (exceptionType !== 1 && exceptionType !== 2)) continue;
+    calendarDates.push({ serviceId, date, exceptionType });
+  }
+
+  return { trips, stopTimes, stops, routes, calendar, calendarDates };
 }
 
 /**
@@ -288,6 +304,10 @@ export function buildTableData(gtfs) {
       `(${escapeSQL(route.routeId)}, ${escapeSQL(route.routeShortName)}, ${escapeSQL(route.destinationStop)})`
   );
 
+  const calendarDateValues = gtfs.calendarDates.map(
+    (cd) => `(${escapeSQL(cd.serviceId)}, ${escapeSQL(cd.date)}, ${cd.exceptionType})`
+  );
+
   const calendarValues = gtfs.calendar.map(
     (c) =>
       `(${escapeSQL(c.serviceId)}, ${escapeSQL(c.startDate)}, ${escapeSQL(c.endDate)}, ${c.weekdays.join(', ')})`
@@ -299,6 +319,7 @@ export function buildTableData(gtfs) {
     { table: 'gtfs_stops', columns: 'stop_id, stop_name', values: stopValues },
     { table: 'gtfs_routes', columns: 'route_id, route_short_name, destination_stop', values: routeValues },
     { table: 'gtfs_calendar', columns: 'service_id, start_date, end_date, monday, tuesday, wednesday, thursday, friday, saturday, sunday', values: calendarValues },
+    { table: 'gtfs_calendar_dates', columns: 'service_id, date, exception_type', values: calendarDateValues },
   ];
 }
 

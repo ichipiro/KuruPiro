@@ -402,7 +402,7 @@ export interface IFindTripsQuery {
 export class FindTripsQuery implements IFindTripsQuery {
   constructor(private readonly d1: D1Database) {}
 
-  async findByStopsAndWeekday(...): Promise<TripSearchResult[]> {
+  async findByStopsAndDate(...): Promise<TripSearchResult[]> {
     // gtfs_stop_times を出発地側・目的地側で2回参照するJOINクエリ
     // - trips, calendar, routes を結合し、曜日で運行便を絞る
     // - 出発地→目的地の stop_sequence 順序を検証
@@ -411,8 +411,10 @@ export class FindTripsQuery implements IFindTripsQuery {
 ```
 
 現在時刻での絞り込みは `TripFinderService` がJS側で行います。
-クエリを「曜日ごとの時刻表」に限定することで、GTFS静的データが更新されるまで
+クエリを「サービス日ごとの時刻表」に限定することで、GTFS静的データが更新されるまで
 結果が変わらなくなり、`CachedFindTripsQuery` でキャッシュできるようになっています。
+運行判定は calendar（曜日＋適用期間）と calendar_dates（祝日などの例外）の
+両方を評価します（祝日は「平日サービス除外＋日祝サービス追加」で表現される）。
 
 #### D1使用量の削減
 

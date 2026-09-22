@@ -12,9 +12,10 @@ interface SerializedTripSearchResult extends Omit<TripSearchResult, 'arrivalTime
 /**
  * KVキー先頭の名前空間
  *
- * シリアライズ形式を変えるときはバージョンを上げて旧エントリを自然失効させる。
+ * キーの意味やシリアライズ形式を変えるときはバージョンを上げて
+ * 旧エントリを自然失効させる（v1=曜日キー、v2=サービス日キー）。
  */
-const KEY_PREFIX = 'timetable:v1';
+const KEY_PREFIX = 'timetable:v2';
 
 /**
  * 曜日ごとの時刻表のキャッシュ保持時間（秒）
@@ -60,16 +61,17 @@ export class CachedFindTripsQuery implements IFindTripsQuery {
     private readonly ctx?: ExecutionContext
   ) {}
 
-  async findByStopsAndWeekday(
+  async findByStopsAndDate(
     originStopId: StopId,
     destinationStopId: StopId,
+    serviceDate: string,
     weekday: number
   ): Promise<TripSearchResult[]> {
     if (!this.kv) {
-      return this.inner.findByStopsAndWeekday(originStopId, destinationStopId, weekday);
+      return this.inner.findByStopsAndDate(originStopId, destinationStopId, serviceDate, weekday);
     }
 
-    const cacheKey = this.buildCacheKey(originStopId, destinationStopId, weekday);
+    const cacheKey = this.buildCacheKey(originStopId, destinationStopId, serviceDate);
 
     // KVの読み取り失敗はキャッシュミスとして扱う
     let cached: SerializedTripSearchResult[] | null = null;
@@ -82,9 +84,10 @@ export class CachedFindTripsQuery implements IFindTripsQuery {
       return cached.map(deserialize);
     }
 
-    const results = await this.inner.findByStopsAndWeekday(
+    const results = await this.inner.findByStopsAndDate(
       originStopId,
       destinationStopId,
+      serviceDate,
       weekday
     );
 
@@ -129,9 +132,9 @@ export class CachedFindTripsQuery implements IFindTripsQuery {
   private buildCacheKey(
     originStopId: StopId,
     destinationStopId: StopId,
-    weekday: number
+    serviceDate: string
   ): string {
-    return `${KEY_PREFIX}:${originStopId.value}:${destinationStopId.value}:${weekday}`;
+    return `${KEY_PREFIX}:${originStopId.value}:${destinationStopId.value}:${serviceDate}`;
   }
 }
 
