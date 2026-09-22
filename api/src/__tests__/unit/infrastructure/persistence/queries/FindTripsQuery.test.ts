@@ -40,8 +40,11 @@ describe('FindTripsQuery', () => {
     const { sql, params } = lastCall();
     expect(sql).not.toContain('like');
     expect(sql).not.toContain('LIKE');
-    expect(params).toContain('51240');
-    expect(params).toContain('51240￿');
+    // 末尾の `_` を含めた範囲: '51240_' <= stop_id < '51240_￿'
+    // （`_` を削ると '10_' 指定が '1000_1' など別グループに誤マッチするため）
+    expect(params).toContain('51240_');
+    expect(params).toContain('51240_￿');
+    expect(params).not.toContain('51240');
   });
 
   it('should use an equality predicate when the destination is not a prefix', async () => {
