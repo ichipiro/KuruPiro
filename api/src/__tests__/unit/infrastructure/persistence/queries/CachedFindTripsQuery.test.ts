@@ -26,7 +26,7 @@ describe('CachedFindTripsQuery', () => {
   let kv: KVNamespace;
 
   beforeEach(() => {
-    inner = { findByStopsAndWeekday: vi.fn().mockResolvedValue(timetable) };
+    inner = { findByStopsAndDate: vi.fn().mockResolvedValue(timetable) };
     store = new Map();
 
     kv = {
@@ -44,23 +44,23 @@ describe('CachedFindTripsQuery', () => {
   it('should query D1 on a cache miss and serve the second call from the cache', async () => {
     const query = new CachedFindTripsQuery(inner, kv);
 
-    const first = await query.findByStopsAndWeekday(originStopId, destinationStopId, 0);
-    const second = await query.findByStopsAndWeekday(originStopId, destinationStopId, 0);
+    const first = await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+    const second = await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
 
-    expect(inner.findByStopsAndWeekday).toHaveBeenCalledOnce();
+    expect(inner.findByStopsAndDate).toHaveBeenCalledOnce();
     expect(first).toEqual(timetable);
     // GTFSTime まで含めて復元できていること
     expect(second).toEqual(timetable);
     expect(second[0].arrivalTime.toString()).toBe('10:30:00');
   });
 
-  it('should use a separate cache entry per weekday', async () => {
+  it('should use a separate cache entry per service date', async () => {
     const query = new CachedFindTripsQuery(inner, kv);
 
-    await query.findByStopsAndWeekday(originStopId, destinationStopId, 0);
-    await query.findByStopsAndWeekday(originStopId, destinationStopId, 1);
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20260915', 1);
 
-    expect(inner.findByStopsAndWeekday).toHaveBeenCalledTimes(2);
+    expect(inner.findByStopsAndDate).toHaveBeenCalledTimes(2);
     // 時刻表2エントリ + 組み合わせ記録1エントリ
     expect(store.size).toBe(3);
   });
@@ -68,10 +68,10 @@ describe('CachedFindTripsQuery', () => {
   it('should register the requested pair once for the timetable push', async () => {
     const query = new CachedFindTripsQuery(inner, kv);
 
-    // 曜日違い・キャッシュヒットを挟んでも、組み合わせ記録は1つだけ
-    await query.findByStopsAndWeekday(originStopId, destinationStopId, 0);
-    await query.findByStopsAndWeekday(originStopId, destinationStopId, 0);
-    await query.findByStopsAndWeekday(originStopId, destinationStopId, 1);
+    // 日付違い・キャッシュヒットを挟んでも、組み合わせ記録は1つだけ
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20260915', 1);
 
     expect(store.get('pairs:v1:origin_stop:dest_stop')).toBe('1');
     const pairPuts = (kv.put as ReturnType<typeof vi.fn>).mock.calls.filter(
@@ -83,10 +83,10 @@ describe('CachedFindTripsQuery', () => {
   it('should store entries with an expiration TTL', async () => {
     const query = new CachedFindTripsQuery(inner, kv);
 
-    await query.findByStopsAndWeekday(originStopId, destinationStopId, 0);
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
 
     expect(kv.put).toHaveBeenCalledWith(
-      expect.stringContaining('timetable:v1:origin_stop:dest_stop:0'),
+      expect.stringContaining('timetable:v2:origin_stop:dest_stop:20260914'),
       expect.any(String),
       expect.objectContaining({ expirationTtl: expect.any(Number) })
     );
@@ -99,7 +99,7 @@ describe('CachedFindTripsQuery', () => {
       passThroughOnException: vi.fn(),
     } as unknown as ExecutionContext);
 
-    await query.findByStopsAndWeekday(originStopId, destinationStopId, 0);
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
 
     expect(waitUntil).toHaveBeenCalledOnce();
   });
@@ -107,10 +107,10 @@ describe('CachedFindTripsQuery', () => {
   it('should fall back to D1 when no KV namespace is provided', async () => {
     const query = new CachedFindTripsQuery(inner);
 
-    const results = await query.findByStopsAndWeekday(originStopId, destinationStopId, 0);
+    const results = await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
 
     expect(results).toEqual(timetable);
-    expect(inner.findByStopsAndWeekday).toHaveBeenCalledOnce();
+    expect(inner.findByStopsAndDate).toHaveBeenCalledOnce();
   });
 
   it('should treat a KV read failure as a cache miss', async () => {
@@ -118,10 +118,10 @@ describe('CachedFindTripsQuery', () => {
 
     const query = new CachedFindTripsQuery(inner, kv);
 
-    const results = await query.findByStopsAndWeekday(originStopId, destinationStopId, 0);
+    const results = await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
 
     expect(results).toEqual(timetable);
-    expect(inner.findByStopsAndWeekday).toHaveBeenCalledOnce();
+    expect(inner.findByStopsAndDate).toHaveBeenCalledOnce();
   });
 
   it('should not fail the request when the KV write fails', async () => {
@@ -129,7 +129,7 @@ describe('CachedFindTripsQuery', () => {
 
     const query = new CachedFindTripsQuery(inner, kv);
 
-    const results = await query.findByStopsAndWeekday(originStopId, destinationStopId, 0);
+    const results = await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
 
     expect(results).toEqual(timetable);
   });

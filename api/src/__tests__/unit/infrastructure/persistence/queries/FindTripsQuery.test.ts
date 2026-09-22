@@ -35,7 +35,7 @@ describe('FindTripsQuery', () => {
     const { d1, lastCall } = createD1Spy();
     const query = new FindTripsQuery(d1);
 
-    await query.findByStopsAndWeekday(originStopId, StopId.fromString('51240_'), 0);
+    await query.findByStopsAndDate(originStopId, StopId.fromString('51240_'), '20260914', 0);
 
     const { sql, params } = lastCall();
     expect(sql).not.toContain('like');
@@ -48,7 +48,7 @@ describe('FindTripsQuery', () => {
     const { d1, lastCall } = createD1Spy();
     const query = new FindTripsQuery(d1);
 
-    await query.findByStopsAndWeekday(originStopId, StopId.fromString('51240_5'), 0);
+    await query.findByStopsAndDate(originStopId, StopId.fromString('51240_5'), '20260914', 0);
 
     const { sql, params } = lastCall();
     expect(sql).not.toContain('LIKE');
@@ -59,7 +59,7 @@ describe('FindTripsQuery', () => {
     const { d1, lastCall } = createD1Spy();
     const query = new FindTripsQuery(d1);
 
-    await query.findByStopsAndWeekday(originStopId, StopId.fromString('51240_'), 0);
+    await query.findByStopsAndDate(originStopId, StopId.fromString('51240_'), '20260914', 0);
 
     expect(lastCall().sql).toMatch(/order by\s+"origin_stops"\."arrival_time"/i);
   });
@@ -68,9 +68,29 @@ describe('FindTripsQuery', () => {
     const { d1, lastCall } = createD1Spy();
     const query = new FindTripsQuery(d1);
 
-    await query.findByStopsAndWeekday(originStopId, StopId.fromString('51240_'), 6);
+    await query.findByStopsAndDate(originStopId, StopId.fromString('51240_'), '20260920', 6);
 
     expect(lastCall().sql).toContain('"sunday"');
+  });
+
+  it('should evaluate calendar_dates exceptions and the service period', async () => {
+    const { d1, lastCall } = createD1Spy();
+    const query = new FindTripsQuery(d1);
+
+    await query.findByStopsAndDate(originStopId, StopId.fromString('51240_'), '20260921', 0);
+
+    const { sql, params } = lastCall();
+    // 祝日例外: 当日の除外(type=2)がない定常運行、または当日の追加(type=1)
+    expect(sql).toContain('gtfs_calendar_dates');
+    expect(sql).toMatch(/not exists/i);
+    expect(sql).toMatch(/exists/i);
+    // 適用期間: start_date <= 日付 <= end_date
+    expect(sql).toContain('"start_date"');
+    expect(sql).toContain('"end_date"');
+    // calendar_dates のみで運行するサービスも拾えるよう calendar は LEFT JOIN
+    expect(sql).toMatch(/left join "gtfs_calendar"/i);
+    // サービス日が3箇所（除外・追加・期間×2）でバインドされる
+    expect(params.filter((p) => p === '20260921').length).toBeGreaterThanOrEqual(3);
   });
 
   it('should return an empty array for an out-of-range weekday without querying', async () => {
@@ -78,7 +98,7 @@ describe('FindTripsQuery', () => {
     const query = new FindTripsQuery(d1);
 
     await expect(
-      query.findByStopsAndWeekday(originStopId, StopId.fromString('51240_'), 7)
+      query.findByStopsAndDate(originStopId, StopId.fromString('51240_'), '20260921', 7)
     ).resolves.toEqual([]);
   });
 });

@@ -34,11 +34,12 @@ export class TripFinderService {
     destinationStopId: StopId,
     currentDateTime: JSTDateTime
   ): Promise<TripSearchResult[]> {
-    const { weekday, gtfsTime } = this.calculateGTFSParams(currentDateTime);
+    const { serviceDate, weekday, gtfsTime } = this.calculateGTFSParams(currentDateTime);
 
-    const timetable = await this.query.findByStopsAndWeekday(
+    const timetable = await this.query.findByStopsAndDate(
       originStopId,
       destinationStopId,
+      serviceDate,
       weekday
     );
 
@@ -88,6 +89,7 @@ export class TripFinderService {
    * @returns weekday(0=月曜, 6=日曜) と gtfsTime
    */
   private calculateGTFSParams(dateTime: JSTDateTime): {
+    serviceDate: string;
     weekday: number;
     gtfsTime: GTFSTime;
   } {
@@ -113,7 +115,7 @@ export class TripFinderService {
         dateTime.second
       );
 
-      return { weekday, gtfsTime };
+      return { serviceDate: formatServiceDate(previousDay), weekday, gtfsTime };
     }
 
     // 通常の時間帯
@@ -124,6 +126,17 @@ export class TripFinderService {
       dateTime.second
     );
 
-    return { weekday, gtfsTime };
+    return { serviceDate: formatServiceDate(dateTime), weekday, gtfsTime };
   }
+}
+
+/**
+ * GTFSのサービス日表記（YYYYMMDD）に変換する
+ */
+function formatServiceDate(dateTime: JSTDateTime): string {
+  return (
+    String(dateTime.year) +
+    String(dateTime.month).padStart(2, '0') +
+    String(dateTime.day).padStart(2, '0')
+  );
 }

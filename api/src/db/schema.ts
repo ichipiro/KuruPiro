@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core';
 
 export const trips = sqliteTable('gtfs_trips', {
   tripId: text('trip_id').primaryKey(),
@@ -55,6 +55,22 @@ export const calendar = sqliteTable('gtfs_calendar', {
   saturday: integer('saturday').notNull(),
   sunday: integer('sunday').notNull(),
 });
+
+/**
+ * GTFS calendar_dates.txt: 運行日の例外（祝日など）
+ *
+ * exception_type: 1=その日に運行を追加, 2=その日の運行を除外。
+ * 祝日は「平日サービスを除外し日祝サービスを追加する」形で表現される。
+ */
+export const calendarDates = sqliteTable(
+  'gtfs_calendar_dates',
+  {
+    serviceId: text('service_id').notNull(),
+    date: text('date').notNull(), // YYYYMMDD
+    exceptionType: integer('exception_type').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.serviceId, table.date] })]
+);
 
 export const stops = sqliteTable('gtfs_stops', {
   stopId: text('stop_id').primaryKey(),

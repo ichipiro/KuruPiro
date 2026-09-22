@@ -31,7 +31,7 @@ describe('TripFinderService', () => {
   beforeEach(() => {
     // Mock IFindTripsQuery
     mockQuery = {
-      findByStopsAndWeekday: vi.fn(),
+      findByStopsAndDate: vi.fn(),
     };
 
     // Mock IRealtimeRepository
@@ -46,7 +46,7 @@ describe('TripFinderService', () => {
 
   describe('findTrips', () => {
     it('should query the timetable by weekday without a time argument', async () => {
-      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([]);
+      vi.mocked(mockQuery.findByStopsAndDate).mockResolvedValue([]);
 
       service = new TripFinderService(mockQuery, mockRealtimeRepo);
 
@@ -56,15 +56,16 @@ describe('TripFinderService', () => {
 
       // 時刻表が空ならリアルタイムの問い合わせ自体が不要
       expect(mockRealtimeRepo.getTripUpdatesForTrips).not.toHaveBeenCalled();
-      expect(mockQuery.findByStopsAndWeekday).toHaveBeenCalledWith(
+      expect(mockQuery.findByStopsAndDate).toHaveBeenCalledWith(
         originStopId,
         destinationStopId,
+        '20250106',
         0 // Monday
       );
     });
 
     it('should keep only trips arriving at or after the current time', async () => {
-      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([
+      vi.mocked(mockQuery.findByStopsAndDate).mockResolvedValue([
         tripResult('past', '09:59:00'),
         tripResult('now', '10:00:00'),
         tripResult('future', '10:01:00'),
@@ -95,7 +96,7 @@ describe('TripFinderService', () => {
           ],
         ])
       );
-      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([
+      vi.mocked(mockQuery.findByStopsAndDate).mockResolvedValue([
         tripResult('delayed', '09:50:00'),
         tripResult('gone', '09:51:00'),
         tripResult('future', '10:30:00'),
@@ -116,7 +117,7 @@ describe('TripFinderService', () => {
 
     it('should fall back to timetable-only results when realtime fails', async () => {
       vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockRejectedValue(new Error('DO timeout'));
-      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([
+      vi.mocked(mockQuery.findByStopsAndDate).mockResolvedValue([
         tripResult('gone', '09:50:00'),
         tripResult('future', '10:30:00'),
       ]);
@@ -131,7 +132,7 @@ describe('TripFinderService', () => {
     });
 
     it('should correctly calculate weekday (Sunday = 6)', async () => {
-      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([]);
+      vi.mocked(mockQuery.findByStopsAndDate).mockResolvedValue([]);
 
       service = new TripFinderService(mockQuery);
 
@@ -139,16 +140,17 @@ describe('TripFinderService', () => {
 
       await service.findTrips(originStopId, destinationStopId, currentDateTime);
 
-      expect(mockQuery.findByStopsAndWeekday).toHaveBeenCalledWith(
+      expect(mockQuery.findByStopsAndDate).toHaveBeenCalledWith(
         originStopId,
         destinationStopId,
+        '20250112',
         6 // Sunday
       );
     });
 
     it('should handle late-night times (25:30:00 for 01:30 next day)', async () => {
       vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockResolvedValue(new Map());
-      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([
+      vi.mocked(mockQuery.findByStopsAndDate).mockResolvedValue([
         tripResult('before', '25:29:00'),
         tripResult('after', '25:31:00'),
       ]);
@@ -164,16 +166,17 @@ describe('TripFinderService', () => {
         currentDateTime
       );
 
-      expect(mockQuery.findByStopsAndWeekday).toHaveBeenCalledWith(
+      expect(mockQuery.findByStopsAndDate).toHaveBeenCalledWith(
         originStopId,
         destinationStopId,
+        '20250106', // 前日(月曜)のサービス日として扱われる
         0 // Monday (because it's considered late Monday night)
       );
       expect(results.map((r) => r.tripId)).toEqual(['after']);
     });
 
     it('should return empty array when no trips found', async () => {
-      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([]);
+      vi.mocked(mockQuery.findByStopsAndDate).mockResolvedValue([]);
 
       service = new TripFinderService(mockQuery);
 
@@ -191,7 +194,7 @@ describe('TripFinderService', () => {
     it('should pass the prefix destination through to the query as-is', async () => {
       const prefixDest = StopId.fromString('dest_');
 
-      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([]);
+      vi.mocked(mockQuery.findByStopsAndDate).mockResolvedValue([]);
 
       service = new TripFinderService(mockQuery);
 
@@ -199,9 +202,10 @@ describe('TripFinderService', () => {
 
       await service.findTrips(originStopId, prefixDest, currentDateTime);
 
-      expect(mockQuery.findByStopsAndWeekday).toHaveBeenCalledWith(
+      expect(mockQuery.findByStopsAndDate).toHaveBeenCalledWith(
         originStopId,
         prefixDest,
+        '20250106',
         0
       );
     });

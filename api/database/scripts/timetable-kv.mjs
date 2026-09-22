@@ -27,8 +27,8 @@
  * APIトークンには Workers KV Storage:Edit の権限が必要。
  */
 
-/** Worker側 CachedFindTripsQuery と同じキー体系 */
-const KEY_PREFIX = 'timetable:v1';
+/** Worker側 CachedFindTripsQuery と同じキー体系（v2 = サービス日キー） */
+const KEY_PREFIX = 'timetable:v2';
 const PAIR_KEY_PREFIX = 'pairs:v1';
 
 /**
@@ -57,12 +57,44 @@ function normalizeTime(time) {
 }
 
 /**
- * 1つの (出発地, 目的地, 曜日) の時刻表を計算する
+ * サービス日（YYYYMMDD）にサービスが運行するか判定する
  *
- * FindTripsQuery.findByStopsAndWeekday と同じ結果（シリアライズ形）を返す。
+ * FindTripsQuery と同じルール:
+ * - calendar: 曜日フラグ + 適用期間(start_date <= 日付 <= end_date)
+ * - calendar_dates: type=2で当日除外、type=1で当日追加（祝日など）
  */
-function buildTimetable(indexes, originStopId, destinationStopId, weekday) {
-  const { stopTimesByStop, stopTimesByTrip, tripsById, routesById, calendarByService } = indexes;
+function isServiceActive(indexes, serviceId, serviceDate, weekday) {
+  const exception = indexes.exceptionsByServiceDate.get(`${serviceId}:${serviceDate}`);
+  if (exception === 2) return false;
+  if (exception === 1) return true;
+  const cal = indexes.calendarByService.get(serviceId);
+  if (!cal) return false;
+  return (
+    cal.weekdays[weekday] === 1 &&
+    cal.startDate <= serviceDate &&
+    cal.endDate >= serviceDate
+  );
+}
+
+/**
+ * サービス日の曜日（0=月曜..6=日曜）をYYYYMMDDから求める（TZ非依存）
+ */
+function weekdayOf(serviceDate) {
+  const y = Number(serviceDate.slice(0, 4));
+  const m = Number(serviceDate.slice(4, 6));
+  const d = Number(serviceDate.slice(6, 8));
+  const day = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=日曜
+  return (day + 6) % 7;
+}
+
+/**
+ * 1つの (出発地, 目的地, サービス日) の時刻表を計算する
+ *
+ * FindTripsQuery.findByStopsAndDate と同じ結果（シリアライズ形）を返す。
+ */
+function buildTimetable(indexes, originStopId, destinationStopId, serviceDate) {
+  const { stopTimesByStop, stopTimesByTrip, tripsById, routesById } = indexes;
+  const weekday = weekdayOf(serviceDate);
 
   const isPrefix = destinationStopId.endsWith('_');
   const destPattern = isPrefix ? destinationStopId.slice(0, -1) : destinationStopId;
@@ -73,8 +105,7 @@ function buildTimetable(indexes, originStopId, destinationStopId, weekday) {
   for (const origin of stopTimesByStop.get(originStopId) ?? []) {
     const trip = tripsById.get(origin.tripId);
     if (!trip) continue;
-    const cal = calendarByService.get(trip.serviceId);
-    if (!cal || cal.weekdays[weekday] !== 1) continue;
+    if (!isServiceActive(indexes, trip.serviceId, serviceDate, weekday)) continue;
     const route = routesById.get(trip.routeId);
     if (!route) continue;
 
@@ -99,13 +130,36 @@ function buildTimetable(indexes, originStopId, destinationStopId, weekday) {
 }
 
 /**
- * 組み合わせ×7曜日のKVエントリを計算する
+ * 配信対象のサービス日数（今日から何日分の時刻表をKVに置くか）
+ */
+const PUSH_DAYS = 8;
+
+/**
+ * 今日からPUSH_DAYS日分のサービス日（YYYYMMDD、JST基準）を返す
+ */
+export function upcomingServiceDates(now = new Date()) {
+  const dates = [];
+  for (let i = 0; i < PUSH_DAYS; i++) {
+    // JSTは固定UTC+9
+    const jst = new Date(now.getTime() + 9 * 3600 * 1000 + i * 86400 * 1000);
+    dates.push(
+      String(jst.getUTCFullYear()) +
+        String(jst.getUTCMonth() + 1).padStart(2, '0') +
+        String(jst.getUTCDate()).padStart(2, '0')
+    );
+  }
+  return dates;
+}
+
+/**
+ * 組み合わせ×直近サービス日のKVエントリを計算する
  *
  * @param {object} gtfs parseGtfsFiles の戻り値
  * @param {[string, string][]} pairs [出発地, 目的地] の配列
+ * @param {string[]} [serviceDates] 対象サービス日（省略時は今日から8日分）
  * @returns {{key: string, value: string}[]}
  */
-export function buildTimetables(gtfs, pairs) {
+export function buildTimetables(gtfs, pairs, serviceDates = upcomingServiceDates()) {
   const stopTimesByStop = new Map();
   const stopTimesByTrip = new Map();
   for (const st of gtfs.stopTimes) {
@@ -120,14 +174,17 @@ export function buildTimetables(gtfs, pairs) {
     tripsById: new Map(gtfs.trips.map((t) => [t.tripId, t])),
     routesById: new Map(gtfs.routes.map((r) => [r.routeId, r])),
     calendarByService: new Map(gtfs.calendar.map((c) => [c.serviceId, c])),
+    exceptionsByServiceDate: new Map(
+      (gtfs.calendarDates ?? []).map((cd) => [`${cd.serviceId}:${cd.date}`, cd.exceptionType])
+    ),
   };
 
   const entries = [];
   for (const [origin, destination] of pairs) {
-    for (let weekday = 0; weekday < 7; weekday++) {
-      const rows = buildTimetable(indexes, origin, destination, weekday);
+    for (const serviceDate of serviceDates) {
+      const rows = buildTimetable(indexes, origin, destination, serviceDate);
       entries.push({
-        key: `${KEY_PREFIX}:${origin}:${destination}:${weekday}`,
+        key: `${KEY_PREFIX}:${origin}:${destination}:${serviceDate}`,
         value: JSON.stringify(rows),
       });
     }

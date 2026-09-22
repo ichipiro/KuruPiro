@@ -1,7 +1,7 @@
-import { eq, and, gt, gte, lt } from 'drizzle-orm';
+import { eq, and, or, gt, gte, lt, lte, sql, exists, notExists, isNotNull } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { getDBClient } from '@/db/client';
-import { stopTimes, trips, calendar, routes } from '@/db/schema';
+import { stopTimes, trips, calendar, calendarDates, routes } from '@/db/schema';
 import { StopId } from '@/domain/value-objects/identifiers';
 import { GTFSTime } from '@/domain/value-objects/time';
 import type { IFindTripsQuery, TripSearchResult } from '@/domain/queries';
@@ -26,7 +26,14 @@ export class FindTripsQuery implements IFindTripsQuery {
   constructor(private readonly d1: D1Database) {}
 
   /**
-   * 出発地と目的地を通過するトリップを、その曜日の1日分まとめて取得
+   * 出発地と目的地を通過するトリップを、そのサービス日の1日分まとめて取得
+   *
+   * 運行判定は次のGTFS仕様に従う:
+   * - calendar: 曜日フラグ + 適用期間(start_date <= 日付 <= end_date)
+   * - calendar_dates: type=2ならその日の運行を除外、type=1なら追加
+   *   （祝日は「平日サービス除外＋日祝サービス追加」で表現される）
+   * - calendarに載らずcalendar_datesの追加のみで運行するサービスにも
+   *   対応するため、calendarはLEFT JOINにする
    *
    * インデックス `idx_stop_times_stop_arrival` / `idx_stop_times_trip_stop` を
    * 前提に、CTEを使わず直接JOINすることで両側ともカバリングインデックスで解決させ、
@@ -34,11 +41,13 @@ export class FindTripsQuery implements IFindTripsQuery {
    *
    * @param originStopId 出発地停留所ID
    * @param destinationStopId 目的地停留所ID（末尾に_があるとプレフィックスマッチ）
-   * @param weekday 曜日（0=Monday, 6=Sunday）
+   * @param serviceDate サービス日（YYYYMMDD）
+   * @param weekday serviceDateの曜日（0=Monday, 6=Sunday）
    */
-  async findByStopsAndWeekday(
+  async findByStopsAndDate(
     originStopId: StopId,
     destinationStopId: StopId,
+    serviceDate: string,
     weekday: number
   ): Promise<TripSearchResult[]> {
     // 曜日列名を取得
@@ -77,6 +86,40 @@ export class FindTripsQuery implements IFindTripsQuery {
         )
       : eq(destStops.stopId, destPattern);
 
+    // calendar_dates による当日例外（除外・追加）
+    const removedOnDate = db
+      .select({ one: sql`1` })
+      .from(calendarDates)
+      .where(
+        and(
+          eq(calendarDates.serviceId, trips.serviceId),
+          eq(calendarDates.date, serviceDate),
+          eq(calendarDates.exceptionType, 2)
+        )
+      );
+    const addedOnDate = db
+      .select({ one: sql`1` })
+      .from(calendarDates)
+      .where(
+        and(
+          eq(calendarDates.serviceId, trips.serviceId),
+          eq(calendarDates.date, serviceDate),
+          eq(calendarDates.exceptionType, 1)
+        )
+      );
+
+    // 「calendarの定常運行（曜日+適用期間、当日除外なし）」または「当日の追加運行」
+    const serviceActiveOnDate = or(
+      and(
+        isNotNull(calendar.serviceId),
+        eq(weekdayColumn, 1),
+        lte(calendar.startDate, serviceDate),
+        gte(calendar.endDate, serviceDate),
+        notExists(removedOnDate)
+      ),
+      exists(addedOnDate)
+    );
+
     const results = await db
       .select({
         tripId: originStops.tripId,
@@ -97,9 +140,9 @@ export class FindTripsQuery implements IFindTripsQuery {
         )
       )
       .innerJoin(trips, eq(trips.tripId, originStops.tripId))
-      .innerJoin(calendar, eq(calendar.serviceId, trips.serviceId))
+      .leftJoin(calendar, eq(calendar.serviceId, trips.serviceId))
       .innerJoin(routes, eq(routes.routeId, trips.routeId))
-      .where(and(eq(originStops.stopId, originStopId.value), eq(weekdayColumn, 1)))
+      .where(and(eq(originStops.stopId, originStopId.value), serviceActiveOnDate))
       .orderBy(originStops.arrivalTime);
 
     // 結果をドメイン型に変換
