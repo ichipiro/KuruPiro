@@ -1,7 +1,7 @@
 import useSWR from 'swr'
 import { useState, useEffect, useMemo } from 'react'
 import { BusService } from '../types/api'
-import { getJapanDate } from './useJapanTime'
+import { getJapanDate, syncClockFromResponse } from './useJapanTime'
 
 type BusData = {
   busId: string;
@@ -90,6 +90,8 @@ const batchFetcher = ([url, queries]: [string, typeof BATCH_QUERIES]) => {
       if (!res.ok) {
         throw new Error(`batch API error: ${res.status}`)
       }
+      // レスポンスのDateヘッダで端末時計のズレを補正する（追加リクエスト不要）
+      syncClockFromResponse(res)
       return res.json() as Promise<BusService[][]>
     })
     .then(data => {
