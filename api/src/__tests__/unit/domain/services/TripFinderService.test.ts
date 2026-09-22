@@ -114,6 +114,22 @@ describe('TripFinderService', () => {
       expect(results.map((r) => r.tripId)).toEqual(['delayed', 'future']);
     });
 
+    it('should fall back to timetable-only results when realtime fails', async () => {
+      vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockRejectedValue(new Error('DO timeout'));
+      vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([
+        tripResult('gone', '09:50:00'),
+        tripResult('future', '10:30:00'),
+      ]);
+
+      service = new TripFinderService(mockQuery, mockRealtimeRepo);
+      const currentDateTime = JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0);
+
+      const results = await service.findTrips(originStopId, destinationStopId, currentDateTime);
+
+      // リアルタイム免除は効かないが、時刻表ベースの結果は返る
+      expect(results.map((r) => r.tripId)).toEqual(['future']);
+    });
+
     it('should correctly calculate weekday (Sunday = 6)', async () => {
       vi.mocked(mockQuery.findByStopsAndWeekday).mockResolvedValue([]);
 

@@ -24,6 +24,16 @@ export function resetRealtimeIsolateCache(): void {
 }
 
 /**
+ * DO呼び出しの上限時間（ミリ秒）
+ *
+ * リアルタイム情報は補助データなので、応答しないDOを待ち続けるより
+ * 諦めて時刻表だけ返す方がよい。過去に応答が返らないまま数分固まる
+ * リクエストが観測されており（wallTime 298秒等）、その間クライアントの
+ * ポーリングが塞がってサイネージ停止の引き金になった。
+ */
+const DO_FETCH_TIMEOUT_MS = 5_000;
+
+/**
  * Durable Objectを使用したリアルタイムリポジトリの実装
  */
 export class DurableObjectRealtimeRepository implements IRealtimeRepository {
@@ -35,10 +45,26 @@ export class DurableObjectRealtimeRepository implements IRealtimeRepository {
    */
   private selectiveCache = new Map<string, TripUpdate | undefined>();
 
-  constructor(env: Env) {
+  constructor(
+    env: Env,
+    private readonly timeoutMs: number = DO_FETCH_TIMEOUT_MS
+  ) {
     // Use a fixed ID for the singleton Durable Object
     const id = env.REALTIME_CACHE.idFromName('realtime-cache');
     this.stub = env.REALTIME_CACHE.get(id);
+  }
+
+  /**
+   * タイムアウト付きでDOを呼び出す
+   */
+  private async fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      return await this.stub.fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**
@@ -88,7 +114,7 @@ export class DurableObjectRealtimeRepository implements IRealtimeRepository {
     }
 
     if (missing.length > 0) {
-      const response = await this.stub.fetch('https://fake-host/updates', {
+      const response = await this.fetchWithTimeout('https://fake-host/updates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tripIds: missing }),
@@ -116,7 +142,7 @@ export class DurableObjectRealtimeRepository implements IRealtimeRepository {
    * リアルタイムデータを強制更新
    */
   async forceUpdate(): Promise<void> {
-    await this.stub.fetch('https://fake-host/update');
+    await this.fetchWithTimeout('https://fake-host/update');
     // 次の読み取りで新しいデータを取り直させる
     isolateCache = null;
     this.loadPromise = null;
@@ -144,7 +170,7 @@ export class DurableObjectRealtimeRepository implements IRealtimeRepository {
     const url = known
       ? `https://fake-host/data?since=${known.fetchedAt}`
       : 'https://fake-host/data';
-    const response = await this.stub.fetch(url);
+    const response = await this.fetchWithTimeout(url);
 
     if (response.status === 304 && known) {
       return known;

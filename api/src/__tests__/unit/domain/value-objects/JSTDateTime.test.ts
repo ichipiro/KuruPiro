@@ -205,6 +205,17 @@ describe('JSTDateTime', () => {
       const jst = JSTDateTime.fromComponents(2024, 1, 16); // 火曜日
       expect(jst.getWeekday()).toBe(1);
     });
+
+    it('JST早朝（UTC日付が前日の時間帯）でも正しい曜日を返す', () => {
+      // 本番WorkerはUTCで動く。JST月曜5:00はUTCでは日曜20:00なので、
+      // ローカルTZのgetDay()を使うと日曜(6)を返してしまう回帰を防ぐ
+      // （このバグにより毎朝9時まで前日の時刻表が表示されていた）
+      const monday5am = JSTDateTime.fromComponents(2026, 9, 14, 5, 0, 0); // 月曜 5:00 JST
+      expect(monday5am.getWeekday()).toBe(0);
+
+      const sundayLate = JSTDateTime.fromComponents(2026, 9, 13, 8, 59, 59); // 日曜 8:59 JST
+      expect(sundayLate.getWeekday()).toBe(6);
+    });
   });
 
   describe('compareTo', () => {

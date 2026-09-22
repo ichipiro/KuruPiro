@@ -80,9 +80,14 @@ export class FindNextBusesUseCase {
     //      TripFinderService が同じ便を取得済みなのでDOへの追加往復は発生しない）
     let tripUpdateMap: Map<string, TripUpdate> | undefined;
     if (this.realtimeRepo) {
-      tripUpdateMap = await this.realtimeRepo.getTripUpdatesForTrips(
-        filteredTripResults.map((trip) => TripId.fromString(trip.tripId))
-      );
+      try {
+        tripUpdateMap = await this.realtimeRepo.getTripUpdatesForTrips(
+          filteredTripResults.map((trip) => TripId.fromString(trip.tripId))
+        );
+      } catch (error) {
+        // リアルタイム取得に失敗しても、遅延・現在位置なしの時刻表として返す
+        console.warn('Realtime updates unavailable, returning schedule-only results:', error);
+      }
     }
 
     // 2.5. 各便の現在位置（停留所名）を1クエリでまとめて取得
