@@ -4,26 +4,35 @@ import { useState, useEffect } from 'react'
 let globalOffset = 0
 const offsetListeners: Set<(offset: number) => void> = new Set()
 
-async function fetchAndSetOffset() {
-  try {
-    const response = await fetch('https://worldtimeapi.org/api/timezone/Asia/Tokyo')
-    const data = await response.json()
-    const serverTime = new Date(data.datetime).getTime()
-    const localTime = Date.now()
-    globalOffset = serverTime - localTime
-    // すべてのリスナーに通知
-    offsetListeners.forEach(listener => listener(globalOffset))
-  } catch (error) {
-    console.error('NTPサーバーからの時刻取得に失敗:', error)
-  }
+/**
+ * Dateヘッダは秒精度のため、リクエストごとに±1秒程度の揺れがある。
+ * 表示時刻が毎回ブレないよう、このしきい値以上ズレたときだけ補正する。
+ */
+const OFFSET_UPDATE_THRESHOLD_MS = 2000
+
+/**
+ * APIレスポンスのDateヘッダから端末時計とのズレを補正する
+ *
+ * 以前は worldtimeapi.org（無料の外部サービスで長期障害の実績あり）に
+ * 4.5時間ごとに問い合わせていたが、バス情報のポーリングで15秒ごとに
+ * 受け取る自APIのレスポンスには必ず正確な Date ヘッダが付いてくるため、
+ * それに相乗りする。外部依存と追加リクエストがなくなり、補正頻度も上がる。
+ */
+export function syncClockFromResponse(response: Response) {
+  const dateHeader = response.headers.get('date')
+  if (!dateHeader) return
+  const serverTime = new Date(dateHeader).getTime()
+  if (Number.isNaN(serverTime)) return
+
+  const newOffset = serverTime - Date.now()
+  if (Math.abs(newOffset - globalOffset) < OFFSET_UPDATE_THRESHOLD_MS) return
+
+  globalOffset = newOffset
+  // すべてのリスナーに通知
+  offsetListeners.forEach(listener => listener(globalOffset))
 }
 
-// 初回取得と定期的な同期（8:00-22:00の運用中に3回程度）
 if (typeof window !== 'undefined') {
-  fetchAndSetOffset()
-  // 約4.5時間ごとに同期（14時間の運用で約3回）
-  setInterval(fetchAndSetOffset, 4.5 * 60 * 60 * 1000)
-  
   // 24時間ごとにページをリロード（メモリリーク対策）
   setTimeout(() => {
     window.location.reload()
