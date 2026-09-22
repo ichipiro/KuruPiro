@@ -1,4 +1,7 @@
-import GtfsRealtimeBindings from 'gtfs-realtime-bindings';
+// gtfs-realtime-bindings(protobufjs込みで約330KB、バンドルの約4割)は
+// DOの定期更新でしか使わないため、動的importで遅延ロードする。
+// 静的importにするとリクエストを捌く全isolateの初期化で毎回ロードされ、
+// コールドスタートのCPUを無駄に消費する
 
 /**
  * GTFS Realtime Protobuf形式のStopTimeUpdate
@@ -30,7 +33,8 @@ export class ProtobufDecoder {
   /**
    * GTFS Realtime Protobufバッファをデコード
    */
-  static decodeTripUpdates(buffer: ArrayBuffer): RawTripUpdate[] {
+  static async decodeTripUpdates(buffer: ArrayBuffer): Promise<RawTripUpdate[]> {
+    const { default: GtfsRealtimeBindings } = await import('gtfs-realtime-bindings');
     // Use official GTFS Realtime bindings to decode
     const feed = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(
       new Uint8Array(buffer)

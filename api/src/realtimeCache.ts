@@ -156,7 +156,7 @@ export class RealtimeCache implements DurableObject {
     console.log(`[RealtimeCache] Downloaded ${buffer.byteLength} bytes`);
 
     // Use ProtobufDecoder to decode the data
-    const rawTripUpdates = ProtobufDecoder.decodeTripUpdates(buffer);
+    const rawTripUpdates = await ProtobufDecoder.decodeTripUpdates(buffer);
     console.log(`[RealtimeCache] Decoded ${rawTripUpdates.length} trip updates`);
 
     // Debug: Log first 10 trip IDs
