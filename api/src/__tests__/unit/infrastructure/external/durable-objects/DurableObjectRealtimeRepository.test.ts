@@ -161,6 +161,23 @@ describe('DurableObjectRealtimeRepository', () => {
     expect(body.tripIds).toEqual(['trip2']);
   });
 
+  it('should abort a hanging DO call at the timeout', async () => {
+    // シグナルを尊重して永遠に応答しないDOを再現
+    doFetch.mockImplementation((_url: string, init?: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('The operation was aborted', 'AbortError'))
+        );
+      })
+    );
+    const repo = new DurableObjectRealtimeRepository(env, 20);
+
+    await expect(repo.getAllTripUpdates()).rejects.toThrow();
+    await expect(
+      new DurableObjectRealtimeRepository(env, 20).getTripUpdatesForTrips([TripId.fromString('trip1')])
+    ).rejects.toThrow();
+  });
+
   it('should return empty updates when the DO has no data yet', async () => {
     doFetch.mockResolvedValueOnce(
       new Response('null', { headers: { 'Content-Type': 'application/json' } })
