@@ -1,0 +1,47 @@
+# APIの型チェックとテストをPRごとに実行する
+#
+# GitHub ActionsのランナーはUTCで動くため、テストも本番Worker（UTC）と
+# 同じタイムゾーンで実行される。開発マシン（JST）でのみテストしていた
+# ことで、実行環境TZに依存するバグ（getWeekdayが本番でJST 0〜9時に
+# 前日の曜日を返す問題）を長期間見逃していた反省から導入。
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - 'api/**'
+      - '.github/workflows/ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm check
+
+      # カバレッジ閾値(85%)は既存の負債で未達のため、まずはテスト成功のみを必須とする
+      - name: Run tests
+        run: npx vitest run
