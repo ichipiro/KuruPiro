@@ -17,6 +17,11 @@ const app = new Hono<{
 
 // グローバルミドルウェア
 // DEBUG_MODEがtrueの場合のみオープンなCORS設定を使用
+//
+// maxAge(Access-Control-Max-Age)はプリフライト結果（許可判定のみ・データは
+// 含まない）をブラウザにキャッシュさせる秒数。未指定だと既定5秒のため、
+// サイネージの15秒ポーリングで毎回 OPTIONS+POST の2往復になっていた。
+// 7200秒はChromium系が受け付ける上限（超過分は切り詰められる）。
 app.use('*', async (c, next) => {
   const isDebugMode = c.env.DEBUG_MODE === 'true';
   if (isDebugMode) {
@@ -24,9 +29,10 @@ app.use('*', async (c, next) => {
       origin: '*',
       allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization'],
+      maxAge: 7200,
     })(c, next);
   }
-  return cors()(c, next);
+  return cors({ origin: '*', maxAge: 7200 })(c, next);
 });
 app.use('*', injectServiceFactory());
 app.use('*', errorHandler);
