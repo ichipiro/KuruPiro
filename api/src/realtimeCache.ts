@@ -13,6 +13,9 @@ export class RealtimeCache implements DurableObject {
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
+    // 調査用計測: このログの頻度＝isolateの再起動頻度。
+    // 「DO呼び出しが数秒待たされる」現象と再起動の相関を見る
+    console.log('[RealtimeCache] instance constructed');
   }
 
   /**
@@ -27,6 +30,19 @@ export class RealtimeCache implements DurableObject {
    * Handle HTTP requests to this Durable Object
    */
   async fetch(request: Request): Promise<Response> {
+    // 調査用計測: ハンドラ自体の所要時間（配送遅延はここに含まれない点に注意）
+    const startedAt = Date.now();
+    try {
+      return await this.handleFetch(request);
+    } finally {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed > 500) {
+        console.warn(`[RealtimeCache] slow handler: ${elapsed}ms ${new URL(request.url).pathname}`);
+      }
+    }
+  }
+
+  private async handleFetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
     // Get cached data
@@ -81,9 +97,12 @@ export class RealtimeCache implements DurableObject {
    * Handle alarm events for periodic updates
    */
   async alarm(): Promise<void> {
+    const startedAt = Date.now();
     await this.updateRealtimeData();
     // Schedule next update
     await this.state.storage.setAlarm(Date.now() + this.getUpdateInterval());
+    // 調査用計測: alarm全体の所要時間（30秒ごとに1行）
+    console.log(`[RealtimeCache] alarm done in ${Date.now() - startedAt}ms`);
   }
 
   /**
@@ -133,8 +152,13 @@ export class RealtimeCache implements DurableObject {
         tripUpdates,
       };
 
+      // 調査用計測: storage.put中はinput gateが閉じ他のリクエストが待たされる
+      // ため、putの所要時間を個別に残す
+      const putStartedAt = Date.now();
       await this.state.storage.put('realtimeData', data);
-      console.log(`[RealtimeCache] Updated ${tripUpdates.length} trip updates`);
+      console.log(
+        `[RealtimeCache] Updated ${tripUpdates.length} trip updates (put: ${Date.now() - putStartedAt}ms)`
+      );
     } catch (error) {
       console.error('[RealtimeCache] Failed to update realtime data:', error);
       // Don't throw - keep existing cached data if update fails
@@ -147,7 +171,7 @@ export class RealtimeCache implements DurableObject {
   private async fetchRealtimeTripUpdates(): Promise<TripUpdateRaw[]> {
     // Add cache busting query parameter to prevent Cloudflare from caching
     const cacheBustingUrl = `${this.env.GTFS_REALTIME_URL}?t=${Date.now()}`;
-    console.log(`[RealtimeCache] Fetching from: ${cacheBustingUrl}`);
+    const fetchStartedAt = Date.now();
     // 配信元が応答しない場合に呼び出し元(alarm/初回リクエスト)ごと
     // 固まらないよう必ず打ち切る。失敗時は既存キャッシュが使われ続ける
     const controller = new AbortController();
@@ -159,7 +183,9 @@ export class RealtimeCache implements DurableObject {
       throw new Error(`Failed to fetch realtime data: ${response.status}`);
     }
     const buffer = await response.arrayBuffer();
-    console.log(`[RealtimeCache] Downloaded ${buffer.byteLength} bytes`);
+    console.log(
+      `[RealtimeCache] Downloaded ${buffer.byteLength} bytes in ${Date.now() - fetchStartedAt}ms`
+    );
 
     // Use ProtobufDecoder to decode the data
     const rawTripUpdates = await ProtobufDecoder.decodeTripUpdates(buffer);
