@@ -96,7 +96,7 @@ export class ServiceFactory {
 
   getRealtimeRepository(): IRealtimeRepository {
     if (!this.realtimeRepo) {
-      this.realtimeRepo = new DurableObjectRealtimeRepository(this.env);
+      this.realtimeRepo = new DurableObjectRealtimeRepository(this.env, this.ctx);
     }
     return this.realtimeRepo;
   }
