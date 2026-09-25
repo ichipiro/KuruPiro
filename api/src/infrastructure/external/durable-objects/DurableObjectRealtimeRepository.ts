@@ -60,8 +60,21 @@ export class DurableObjectRealtimeRepository implements IRealtimeRepository {
   private async fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const startedAt = Date.now();
     try {
-      return await this.stub.fetch(url, { ...init, signal: controller.signal });
+      const response = await this.stub.fetch(url, { ...init, signal: controller.signal });
+      // 調査用計測: タイムアウト未満でも遅い呼び出しの分布を残す
+      const elapsed = Date.now() - startedAt;
+      if (elapsed > 1000) {
+        console.warn(`[RealtimeRepo] slow DO call: ${elapsed}ms ${url}`);
+      }
+      return response;
+    } catch (error) {
+      console.warn(
+        `[RealtimeRepo] DO call failed after ${Date.now() - startedAt}ms: ${url}`,
+        error instanceof Error ? error.name : String(error)
+      );
+      throw error;
     } finally {
       clearTimeout(timer);
     }
