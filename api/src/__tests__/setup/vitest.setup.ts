@@ -5,10 +5,12 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).process.env.TZ = 'UTC';
 
-// Vitest setup file
-// グローバルな設定やモックをここに記述
+import { vi } from "vitest";
 
-// 将来的に必要になる可能性のあるグローバルセットアップ
-// 例: グローバルなDateモック、環境変数の設定など
-
-export {};
+// Stub Worker Cache API (not available in Node environment)
+vi.stubGlobal("caches", {
+  default: {
+    match: vi.fn().mockResolvedValue(undefined),
+    put: vi.fn().mockResolvedValue(undefined),
+  },
+});

@@ -1,0 +1,10 @@
+# GTFS ダウンロードと生成 JSON
+tmp/
+
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+node_modules/
+package-lock.json
