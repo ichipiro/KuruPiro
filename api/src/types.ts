@@ -1,13 +1,24 @@
-/**
- * Cloudflare Workers の環境変数型定義
- */
 export interface Env {
-  DB: D1Database;
-  GTFS_CACHE: KVNamespace;
-  GTFS_STATIC_URL: string;
   GTFS_REALTIME_URL: string;
-  REALTIME_UPDATE_INTERVAL?: string;
-  REALTIME_CACHE: DurableObjectNamespace;
-  ANALYTICS: AnalyticsEngineDataset;
-  DEBUG_MODE?: string;
+  TIMETABLE_BUCKET: R2Bucket;
+}
+
+type Brand<T, B extends string> = T & { readonly __brand: B };
+export type UnixTimeSec = Brand<number, "UnixTimeSec">;
+export type DurationSec = Brand<number, "DurationSec">;
+
+// 正規化済みのTripUpdate
+// docs/gtfs-quirks.md を参照
+export interface StopTimeUpdate {
+  stopId: string;
+  stopSequence?: number;
+  arrivalTime?: UnixTimeSec;
+  departureTime?: UnixTimeSec;
+  delay?: DurationSec;
+}
+
+export interface TripUpdate {
+  tripId: string;
+  routeId?: string;
+  stopTimeUpdates: StopTimeUpdate[];
 }

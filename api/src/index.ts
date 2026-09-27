@@ -1,69 +1,76 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import type { Env } from '@/types';
-import { injectServiceFactory } from '@/presentation/middleware';
-import { errorHandler } from '@/presentation/middleware';
-import { BusController } from '@/presentation/controllers';
-import { StopController } from '@/presentation/controllers';
-import { DebugController } from '@/presentation/controllers';
-import type { ServiceFactory } from '@/infrastructure/di/ServiceFactory';
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import type { Env } from "./types";
+import { getAllTrips, getTripsForStop } from "./realtime";
+import { registerTripRoutes } from "./trips";
 
-const app = new Hono<{
-  Bindings: Env;
-  Variables: {
-    factory: ServiceFactory;
-  };
-}>();
+const app = new Hono<{ Bindings: Env }>();
 
-// グローバルミドルウェア
-// DEBUG_MODEがtrueの場合のみオープンなCORS設定を使用
-//
-// maxAge(Access-Control-Max-Age)はプリフライト結果（許可判定のみ・データは
-// 含まない）をブラウザにキャッシュさせる秒数。未指定だと既定5秒のため、
-// サイネージの15秒ポーリングで毎回 OPTIONS+POST の2往復になっていた。
-// 7200秒はChromium系が受け付ける上限（超過分は切り詰められる）。
-app.use('*', async (c, next) => {
-  const isDebugMode = c.env.DEBUG_MODE === 'true';
-  if (isDebugMode) {
-    return cors({
-      origin: '*',
-      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'Authorization'],
-      maxAge: 7200,
-    })(c, next);
-  }
-  return cors({ origin: '*', maxAge: 7200 })(c, next);
-});
-app.use('*', injectServiceFactory());
-app.use('*', errorHandler);
+// maxAge でプリフライト結果をキャッシュ（Chromium上限の7200秒）
+// 未指定だと既定5秒のためサイネージの15秒ポーリングで毎回 OPTIONS が飛ぶ
+app.use("*", cors({ origin: "*", maxAge: 7200 }));
 
-// ヘルスチェックエンドポイント
-app.get('/', (c) => {
-  return c.json({ status: 'healthy' });
+app.get("/", (c) => c.json({ status: "healthy" }));
+
+app.get("/api/trip_update/gtfs-realtime.json", async (c) => {
+  const trips = await getAllTrips(c.env, c.executionCtx);
+  if (!trips) return c.json({ error: "No data available" }, 503);
+  return c.json(trips);
 });
 
-// デバッグ用エンドポイント（ワイルドカードより先に定義）
-app.post('/api/debug/update-realtime', DebugController.updateRealtime);
-app.get('/api/debug/cache-info', DebugController.getCacheInfo);
-app.get('/api/debug/realtime/:trip_id', DebugController.getRealtimeDetail);
-
-app.get('/api/trips', BusController.getTrips);
-app.post('/api/trips/batch', BusController.batchTrips);
-app.get('/api/stops/:stop_id', StopController.getStopInfo);
-
-// グローバルエラーハンドラー
-app.onError((err, c) => {
-  console.error('Worker error', err);
-  return c.json({ error: err.message || 'Internal Server Error' }, 500);
+app.get("/api/trip_update/:stop_id/gtfs-realtime.json", async (c) => {
+  const { stop_id } = c.req.param();
+  const trips = await getTripsForStop(c.env, stop_id, "");
+  if (!trips) return c.json({ error: "No data available" }, 503);
+  return c.json(trips);
 });
 
-// Durable Objectのエクスポート
-export { RealtimeCache } from './realtimeCache';
+app.get(
+  "/api/trip_update/:stop_id/:dest_stop_id/gtfs-realtime.json",
+  async (c) => {
+    const cache = caches.default;
 
-// Workerのエクスポート
-export default {
-  fetch: app.fetch,
-  async scheduled(_event: ScheduledEvent, _env: Env, _ctx: ExecutionContext): Promise<void> {
-    // No-op: cronは未使用（GTFSデータの更新はGitHub Actionsが行う）
+    const cacheKey = new Request(c.req.url, { method: "GET" });
+
+    const cachedResponse = await cache.match(cacheKey);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
+    const { stop_id, dest_stop_id } = c.req.param();
+    const trips = await getTripsForStop(c.env, stop_id, dest_stop_id);
+    if (!trips) {
+      return c.json({ error: "No data available" }, 503);
+    }
+    const response = c.json(trips, 200, {
+      "Cache-Control": "public, max-age=15",
+    });
+    c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()));
+
+    return response;
   },
-};
+);
+
+// 静的時刻表プロキシ (R2 → クライアント)
+app.get("/timetable/v1/:origin/:dest/:date", async (c) => {
+  const { origin, dest, date } = c.req.param();
+  const obj = await c.env.TIMETABLE_BUCKET.get(
+    `timetable/v1/${origin}/${dest}/${date}.json`,
+  );
+  if (!obj) return c.json({ error: "Not found" }, 404);
+  return new Response(obj.body, {
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "public, max-age=3600",
+    },
+  });
+});
+
+registerTripRoutes(app);
+
+app.onError((err, c) => {
+  console.error("Worker error", err);
+  return c.json({ error: "Internal Server Error" }, 500);
+});
+
+export default app;
