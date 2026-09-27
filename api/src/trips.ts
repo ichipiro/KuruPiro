@@ -104,7 +104,7 @@ export function registerTripRoutes(app: Hono<{ Bindings: Env }>) {
   // /api/trips/:origin/:dest → BusService[]
   app.get("/api/trips/:origin/:dest", async (c) => {
     const { origin, dest } = c.req.param();
-    const trips = await getAllTrips(c.env, c.executionCtx);
+    const trips = await getAllTrips(c.env);
     if (!trips) return c.json({ error: "No data available" }, 503);
 
     const services = await buildServices(c.env, origin, dest, buildRtMap(trips));
@@ -115,7 +115,7 @@ export function registerTripRoutes(app: Hono<{ Bindings: Env }>) {
   app.post("/api/trips/batch", async (c) => {
     const queries: BatchQuery[] = await c.req.json();
 
-    const trips = await getAllTrips(c.env, c.executionCtx);
+    const trips = await getAllTrips(c.env);
     const rtMap = buildRtMap(trips ?? []);
     const nowSec = Math.floor(Date.now() / 1000);
     const dateStr = todayJST();
@@ -145,7 +145,7 @@ export function registerTripRoutes(app: Hono<{ Bindings: Env }>) {
       return c.json({ error: "origin is required" }, 400);
     }
 
-    const trips = await getAllTrips(c.env, c.executionCtx);
+    const trips = await getAllTrips(c.env);
     if (!trips) return c.json({ error: "No data available" }, 503);
 
     const rtMap = buildRtMap(trips);

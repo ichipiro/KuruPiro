@@ -1,7 +1,9 @@
 import { transit_realtime } from "./gen/gtfs-realtime";
 import type { Env, StopTimeUpdate, TripUpdate, UnixTimeSec, DurationSec } from "./types";
 
-const CACHE_TTL = 15;
+const CACHE_TTL_MS = 15_000;
+
+let cachedTrips: { data: TripUpdate[]; expiresAt: number } | null = null;
 
 function normalizeStopId(stopId: string): string {
   return stopId.replace(/ /g, "_");
@@ -39,33 +41,20 @@ async function fetchAndDecode(url: string): Promise<TripUpdate[]> {
 
 export async function getAllTrips(
   env: Env,
-  ctx?: ExecutionContext,
 ): Promise<TripUpdate[] | null> {
-  return getCachedTrips(env, ctx);
+  return getCachedTrips(env);
 }
 
 async function getCachedTrips(
   env: Env,
-  ctx?: ExecutionContext,
 ): Promise<TripUpdate[] | null> {
-  const cache = caches.default;
-  const key = new Request(env.GTFS_REALTIME_URL);
-
-  const cached = await cache.match(key);
-  if (cached) return cached.json<TripUpdate[]>();
+  if (cachedTrips && cachedTrips.expiresAt > Date.now()) {
+    return cachedTrips.data;
+  }
 
   try {
     const trips = await fetchAndDecode(env.GTFS_REALTIME_URL);
-    const put = cache.put(
-      key,
-      new Response(JSON.stringify(trips), {
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": `public, max-age=${CACHE_TTL}`,
-        },
-      }),
-    );
-    ctx ? ctx.waitUntil(put) : await put;
+    cachedTrips = { data: trips, expiresAt: Date.now() + CACHE_TTL_MS };
     return trips;
   } catch (error) {
     console.error("[realtime] Failed to fetch:", error);
@@ -91,9 +80,8 @@ export async function getTripsForStop(
   env: Env,
   stopId: string,
   destStopId: string,
-  ctx?: ExecutionContext,
 ): Promise<TripUpdate[] | null> {
-  const trips = await getCachedTrips(env, ctx);
+  const trips = await getCachedTrips(env);
   if (!trips) return null;
 
   const origin = normalizeStopId(stopId);

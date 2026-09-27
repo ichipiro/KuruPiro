@@ -6,14 +6,12 @@ import { registerTripRoutes } from "./trips";
 
 const app = new Hono<{ Bindings: Env }>();
 
-// maxAge でプリフライト結果をキャッシュ（Chromium上限の7200秒）
-// 未指定だと既定5秒のためサイネージの15秒ポーリングで毎回 OPTIONS が飛ぶ
 app.use("*", cors({ origin: "*", maxAge: 7200 }));
 
 app.get("/", (c) => c.json({ status: "healthy" }));
 
 app.get("/api/trip_update/gtfs-realtime.json", async (c) => {
-  const trips = await getAllTrips(c.env, c.executionCtx);
+  const trips = await getAllTrips(c.env);
   if (!trips) return c.json({ error: "No data available" }, 503);
   return c.json(trips);
 });
