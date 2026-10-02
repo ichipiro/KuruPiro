@@ -57,6 +57,7 @@ describe('Controllers Integration Tests', () => {
       GTFS_STATIC_URL: 'https://example.com/static',
       GTFS_REALTIME_URL: 'https://example.com/realtime',
       REALTIME_CACHE: {} as any,
+      REALTIME_BUCKET: {} as any,
       ANALYTICS: {} as any,
       DEBUG_MODE: 'false',
     };
