@@ -111,6 +111,20 @@ describe('SnapshotRealtimeRepository', () => {
     expect(r2Get).toHaveBeenCalledTimes(2);
   });
 
+  it('should treat an R2Object with undefined body as unchanged (implementation variance)', async () => {
+    await new SnapshotRealtimeRepository(env, ctx).getAllTripUpdates();
+
+    vi.setSystemTime(feed.fetchedAt + 16_000);
+    // bodyプロパティは存在するがundefined、という形で返る実装差異を再現
+    (env.REALTIME_BUCKET.get as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      httpEtag: 'etag-1',
+      body: undefined,
+    });
+
+    const updates = await new SnapshotRealtimeRepository(env, ctx).getAllTripUpdates();
+    expect(updates).toHaveLength(2); // キャッシュ維持・クラッシュしない
+  });
+
   it('should pick up a new snapshot version', async () => {
     await new SnapshotRealtimeRepository(env, ctx).getAllTripUpdates();
 

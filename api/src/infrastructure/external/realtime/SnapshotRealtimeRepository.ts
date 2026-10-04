@@ -187,7 +187,8 @@ export class SnapshotRealtimeRepository implements IRealtimeRepository {
     }
 
     // 条件付き読み取りでETag一致（= 変わっていない）の場合、bodyなしで返る
-    if (!('body' in object) || object.body === null) {
+    // （R2の実装差異に備え、bodyが無い・null・undefinedのいずれも未変更として扱う）
+    if (!('body' in object) || !object.body) {
       if (known) {
         known.syncedAt = Date.now();
       }
