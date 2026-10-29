@@ -30,13 +30,20 @@ describe('SnapshotRealtimeRepository', () => {
   /** R2スタブ: onlyIf.etagDoesNotMatch を本物同様に解釈する */
   const makeR2 = (data: CachedRealtimeData | null, etag = 'etag-1') => {
     r2Get = vi.fn(async (_key: string, options?: { onlyIf?: { etagDoesNotMatch?: string } }) => {
+      const condition = options?.onlyIf?.etagDoesNotMatch;
+      // 本物のR2は引用符付きETag（httpEtag）を条件に渡すと例外を投げる
+      // （2026-10-30 本番障害の再現: 温まったisolateの同期が全滅した）
+      if (condition?.startsWith('"')) {
+        throw new Error(`Conditional ETag should not be wrapped in quotes (${condition}).`);
+      }
       if (data === null) return null;
-      if (options?.onlyIf?.etagDoesNotMatch === etag) {
+      if (condition === etag) {
         // 条件不成立（= 変わっていない）: bodyなしのR2Object相当
-        return { httpEtag: etag };
+        return { etag, httpEtag: `"${etag}"` };
       }
       return {
-        httpEtag: etag,
+        etag,
+        httpEtag: `"${etag}"`,
         body: {},
         json: async () => data,
       };

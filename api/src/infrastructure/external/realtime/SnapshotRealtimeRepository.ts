@@ -197,7 +197,10 @@ export class SnapshotRealtimeRepository implements IRealtimeRepository {
 
     const data = (await this.withTimeout(object.json())) as CachedRealtimeData;
     isolateCache = {
-      etag: object.httpEtag,
+      // httpEtagは引用符付き（`"abc..."`）で、onlyIfに渡すとR2が
+      // 「Conditional ETag should not be wrapped in quotes」で拒否する。
+      // 条件付き読み取りには引用符なしの etag を使うこと
+      etag: object.etag,
       fetchedAt: data.fetchedAt,
       syncedAt: Date.now(),
       rawByTripId: new Map(data.tripUpdates.map((raw) => [raw.tripId, raw])),
