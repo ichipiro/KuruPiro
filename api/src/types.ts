@@ -8,6 +8,9 @@ export interface Env {
   GTFS_REALTIME_URL: string;
   REALTIME_UPDATE_INTERVAL?: string;
   REALTIME_CACHE: DurableObjectNamespace;
+  REALTIME_BUCKET: R2Bucket;
+  /** "false"でDOのポーリングを止める（プレビューWorkerでポーラーが重複しないように） */
+  REALTIME_POLLER_ENABLED?: string;
   ANALYTICS: AnalyticsEngineDataset;
   DEBUG_MODE?: string;
 }

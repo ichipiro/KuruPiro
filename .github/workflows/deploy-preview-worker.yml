@@ -42,7 +42,7 @@ jobs:
         run: |
           cd api
           # Deploy with custom name for branch-specific worker
-          pnpm wrangler deploy --name ${{ steps.sanitize.outputs.worker_name }}
+          pnpm wrangler deploy --name ${{ steps.sanitize.outputs.worker_name }} --var REALTIME_POLLER_ENABLED:false
 
       - name: Comment on PR
         uses: actions/github-script@v7
