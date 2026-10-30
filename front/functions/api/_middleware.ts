@@ -33,10 +33,65 @@ function sanitizeBranchName(branchName: string): string {
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 150;
 
-export async function onRequest(context: { request: Request; env: Env; next: () => Promise<Response> }) {
+/**
+ * エッジキャッシュに載せる秒数（バースト吸収）
+ *
+ * 授業の切れ目などに同一検索（大学⇔駅のデフォルトペア等）が殺到すると、
+ * Workerのisolateが同時にコールドスタートしてCPU制限超過の主因になる。
+ * 同一URLのGETを10秒だけコロケーションのキャッシュで受け、2発目以降を
+ * Workerに届かせない。鮮度への影響は最悪+10秒（対象はGET /api/tripsのみ。
+ * サイネージのPOST /api/trips/batch とdebug系は対象外）。
+ *
+ * Cache APIはカスタムドメイン配下でのみ機能し、pages.dev配信の
+ * プレビューでは常にミスする（= 従来と同じ動作）ため、導入によるデグレはない。
+ */
+const EDGE_CACHE_TTL_SECONDS = 10;
+
+function isEdgeCacheable(request: Request, url: URL): boolean {
+  return request.method === 'GET' && url.pathname === '/api/trips';
+}
+
+function openEdgeCache(): Cache | undefined {
+  try {
+    return (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function onRequest(context: {
+  request: Request;
+  env: Env;
+  waitUntil?: (promise: Promise<unknown>) => void;
+  next: () => Promise<Response>;
+}) {
   const { request, env } = context;
   const url = new URL(request.url);
   const branch = env.CF_PAGES_BRANCH || 'main';
+
+  const edgeCache = isEdgeCacheable(request, url) ? openEdgeCache() : undefined;
+  if (edgeCache) {
+    const hit = await edgeCache.match(request.url).catch(() => undefined);
+    if (hit) {
+      // 保存用に付けた Cache-Control を剥がして返す。素通しすると経路上の
+      // 共有キャッシュ(学内プロキシ等)が「今から10秒」と再解釈し、
+      // 鮮度が最悪+10秒の想定を超えて約+20秒まで悪化しうる
+      const out = new Response(hit.body, hit);
+      out.headers.delete('Cache-Control');
+      return out;
+    }
+  }
+
+  /** 成功レスポンスをエッジキャッシュへ裏で保存しつつ、そのまま返す */
+  const respond = (response: Response): Response => {
+    if (edgeCache && response.ok) {
+      const stored = new Response(response.clone().body, response);
+      stored.headers.set('Cache-Control', `public, s-maxage=${EDGE_CACHE_TTL_SECONDS}`);
+      const put = edgeCache.put(request.url, stored).catch(() => undefined);
+      context.waitUntil?.(put);
+    }
+    return response;
+  };
 
   // リトライで同じリクエストを再送するため、bodyは先に読み切っておく
   const body =
@@ -88,7 +143,7 @@ export async function onRequest(context: { request: Request; env: Env; next: () 
       // 5xxはWorker側の一時的な失敗(コールドスタートのCPU超過など)の
       // 可能性が高いので再試行する。4xx以下はそのまま返す
       if (response.status < 500 || attempt === MAX_ATTEMPTS) {
-        return response;
+        return respond(response);
       }
       lastError = new Error(`Worker returned ${response.status}`);
     } catch (error) {
