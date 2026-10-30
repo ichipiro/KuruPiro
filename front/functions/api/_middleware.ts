@@ -73,7 +73,12 @@ export async function onRequest(context: {
   if (edgeCache) {
     const hit = await edgeCache.match(request.url).catch(() => undefined);
     if (hit) {
-      return hit;
+      // 保存用に付けた Cache-Control を剥がして返す。素通しすると経路上の
+      // 共有キャッシュ(学内プロキシ等)が「今から10秒」と再解釈し、
+      // 鮮度が最悪+10秒の想定を超えて約+20秒まで悪化しうる
+      const out = new Response(hit.body, hit);
+      out.headers.delete('Cache-Control');
+      return out;
     }
   }
 
