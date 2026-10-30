@@ -206,15 +206,18 @@ export class RealtimeCache implements DurableObject {
    * Fetch trip updates from GTFS Realtime API
    */
   private async fetchRealtimeTripUpdates(): Promise<TripUpdateRaw[]> {
-    // 注: 以前付けていた ?t= のキャッシュバスターは、配信元(CloudFront)が
-    // クエリ文字列をキャッシュキーに含めないことを実測で確認したため廃止。
-    // CloudFrontは毎回S3へ条件付き再検証(RefreshHit)しており鮮度は保たれる
+    // ?t= のキャッシュバスターは必須。CloudFrontのキャッシュキーには
+    // クエリが含まれず無意味だが、Cloudflare自身がWorkersのfetch()サブ
+    // リクエストをキャッシュする（この配信元は Cache-Control なし + .bin が
+    // デフォルトキャッシュ対象拡張子 → デフォルトTTLで最大2時間固まる）。
+    // 2026-10-30にバスター廃止後、約100分古い本文を掴み続ける障害が実際に発生した
     const fetchStartedAt = Date.now();
     // 配信元が応答しない場合に呼び出し元(alarm/初回リクエスト)ごと
     // 固まらないよう必ず打ち切る。失敗時は既存キャッシュが使われ続ける
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10_000);
-    const response = await fetch(this.env.GTFS_REALTIME_URL, { signal: controller.signal }).finally(() =>
+    const url = `${this.env.GTFS_REALTIME_URL}?t=${Date.now()}`;
+    const response = await fetch(url, { signal: controller.signal }).finally(() =>
       clearTimeout(timer)
     );
     if (!response.ok) {
