@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env } from '@/types';
 import { injectServiceFactory } from '@/presentation/middleware';
-import { errorHandler } from '@/presentation/middleware';
+import { BadRequestError } from '@/presentation/errors';
 import { BusController } from '@/presentation/controllers';
 import { StopController } from '@/presentation/controllers';
 import { DebugController } from '@/presentation/controllers';
@@ -35,7 +35,6 @@ app.use('*', async (c, next) => {
   return cors({ origin: '*', maxAge: 7200 })(c, next);
 });
 app.use('*', injectServiceFactory());
-app.use('*', errorHandler);
 
 // ヘルスチェックエンドポイント
 app.get('/', (c) => {
@@ -52,9 +51,19 @@ app.post('/api/trips/batch', BusController.batchTrips);
 app.get('/api/stops/:stop_id', StopController.getStopInfo);
 
 // グローバルエラーハンドラー
+//
+// Honoはハンドラー内のthrowをミドルウェアのtry/catchへ伝播させず
+// 直接ここへ渡すため、ステータス判定はonErrorで行うのが唯一の正解。
+// 以前はerrorHandlerミドルウェアで判定していたが一度も実行されておらず、
+// BadRequestErrorも500で返っていた。
 app.onError((err, c) => {
+  if (err instanceof BadRequestError) {
+    return c.json({ error: err.message }, 400);
+  }
   console.error('Worker error', err);
-  return c.json({ error: err.message || 'Internal Server Error' }, 500);
+  // 内部エラーの詳細（D1/R2の生エラー文など）はログにのみ残し、
+  // クライアントへは固定文言を返す
+  return c.json({ error: 'Internal Server Error' }, 500);
 });
 
 // Durable Objectのエクスポート
