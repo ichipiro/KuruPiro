@@ -22,6 +22,11 @@ function parseStopIds(value: string, name: string): StopId[] {
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+  // 「origin=,」のようにパラメータは存在するがフィルタ後に空になる入力を
+  // 素通しすると、後段で originIds[0] が undefined になり500で落ちる
+  if (ids.length === 0) {
+    throw new BadRequestError(`${name} must contain at least one stop id`);
+  }
   if (ids.length > MAX_STOP_IDS) {
     throw new BadRequestError(`${name} accepts at most ${MAX_STOP_IDS} stop ids`);
   }

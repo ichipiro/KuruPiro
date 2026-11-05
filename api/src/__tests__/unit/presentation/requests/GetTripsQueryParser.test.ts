@@ -27,6 +27,16 @@ describe('GetTripsQueryParser', () => {
     expect(() => parse(contextWithQuery({ destination: 'b' }))).toThrow(BadRequestError);
   });
 
+  it('フィルタ後に空になる入力（origin=, など）は500でなく400', () => {
+    // 以前は空配列が素通りして originIds[0] がundefinedになり500で落ちていた
+    expect(() => parse(contextWithQuery({ origin: ',', destination: 'b' }))).toThrow(
+      BadRequestError
+    );
+    expect(() => parse(contextWithQuery({ origin: 'a', destination: ' , ' }))).toThrow(
+      BadRequestError
+    );
+  });
+
   describe('limit', () => {
     it('1〜20にクランプする', () => {
       const base = { origin: 'a', destination: 'b' };

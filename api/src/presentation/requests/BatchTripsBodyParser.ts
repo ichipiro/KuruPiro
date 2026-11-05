@@ -24,6 +24,10 @@ function parseStopIds(value: string, name: string): StopId[] {
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+  // 「destination: ","」のようにフィルタ後に空になる入力は明示的に400にする
+  if (ids.length === 0) {
+    throw new BadRequestError(`${name} must contain at least one stop id`);
+  }
   if (ids.length > MAX_STOP_IDS) {
     throw new BadRequestError(`${name} accepts at most ${MAX_STOP_IDS} stop ids`);
   }

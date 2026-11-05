@@ -92,6 +92,12 @@ describe('BatchTripsBodyParser', () => {
     ).rejects.toThrow(BadRequestError);
   });
 
+  it('フィルタ後に空になるdestination（","など）は400', async () => {
+    await expect(
+      parse(contextWithBody([{ origin: 'a', destination: ',' }]))
+    ).rejects.toThrow(BadRequestError);
+  });
+
   it('destinationは5件・viaは3件まで、超過は400', async () => {
     await expect(
       parse(contextWithBody([{ origin: 'a', destination: 'd1,d2,d3,d4,d5,d6' }]))
