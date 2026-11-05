@@ -9,6 +9,8 @@ import { ProtobufDecoder } from './infrastructure/external/gtfs/ProtobufDecoder'
 export class RealtimeCache implements DurableObject {
   private state: DurableObjectState;
   private env: Env;
+  /** 手動強制更新(/update)のデバウンス用。alarm(15秒間隔)より短い連打を吸収する */
+  private lastManualUpdateAt = 0;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -84,6 +86,22 @@ export class RealtimeCache implements DurableObject {
 
     // Force update
     if (url.pathname === '/update') {
+      // ポーラー無効環境（プレビュー等）では手動更新も受け付けない。
+      // プレビューWorkerは本番と同じR2バケットを共有しているため、
+      // ここを通すと本番のスナップショットを上書きできてしまう
+      if (this.env.REALTIME_POLLER_ENABLED === 'false') {
+        return new Response(JSON.stringify({ status: 'skipped', reason: 'poller disabled' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      // 連打で配信元を叩かないよう、ポーラー間隔(15秒)より短い10秒でデバウンス
+      if (Date.now() - this.lastManualUpdateAt < 10_000) {
+        return new Response(JSON.stringify({ status: 'skipped', reason: 'debounced' }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      this.lastManualUpdateAt = Date.now();
       await this.updateRealtimeData();
       await this.ensureAlarmScheduled();
       return new Response(JSON.stringify({ status: 'updated' }), {
@@ -175,6 +193,15 @@ export class RealtimeCache implements DurableObject {
    * Fetch and update realtime data
    */
   private async updateRealtimeData(): Promise<boolean> {
+    // 「配信元への単一ポーラー」の約束を守る最後の砦。alarm以外にも
+    // /updateや初回読み取り(getCachedData)から呼ばれるため、呼び出し元
+    // ではなくここで止める。プレビューWorker等では配信元fetchも
+    // 共有R2への書き込みも一切行わない
+    if (this.env.REALTIME_POLLER_ENABLED === 'false') {
+      console.log('[RealtimeCache] poller disabled, skipping update');
+      return false;
+    }
+
     try {
       const tripUpdates = await this.fetchRealtimeTripUpdates();
 

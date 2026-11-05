@@ -119,10 +119,17 @@ const PAIR_TTL_SECONDS = 30 * 24 * 3600;
  * KVはグローバルに共有されるので、コロケーションをまたいでもヒットします。
  */
 export class CachedFindTripsQuery implements IFindTripsQuery {
+  /**
+   * @param writesDisabled trueでKVへの書き込み（時刻表put・pairs記録）を行わない。
+   *   プレビューWorkerは本番KVを共有しているため、ブランチ側のバグや
+   *   シリアライズ変更が本番のキャッシュを汚染しないようにする。
+   *   読み取りとisolateメモリ（Worker単位で隔離される）は通常どおり動く。
+   */
   constructor(
     private readonly inner: IFindTripsQuery,
     private readonly kv?: KVNamespace,
-    private readonly ctx?: ExecutionContext
+    private readonly ctx?: ExecutionContext,
+    private readonly writesDisabled = false
   ) {}
 
   async findByStopsAndDate(
@@ -173,7 +180,7 @@ export class CachedFindTripsQuery implements IFindTripsQuery {
     // 枯れ、pairs:v1レジストリも実在しないペアで汚れてダイヤ改正時のKV直接
     // 配信対象(上限100件)から実ペアを押し出しうる。正当な空(運休日など)は
     // isolateメモリ(10分)が吸収するため、D1へ毎回行くことにはならない
-    if (payload.length === 0) {
+    if (payload.length === 0 || this.writesDisabled) {
       return results;
     }
 

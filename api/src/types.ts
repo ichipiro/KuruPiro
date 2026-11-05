@@ -11,6 +11,8 @@ export interface Env {
   REALTIME_BUCKET: R2Bucket;
   /** "false"でDOのポーリングを止める（プレビューWorkerでポーラーが重複しないように） */
   REALTIME_POLLER_ENABLED?: string;
+  /** "true"で共有ストア(KV)への書き込みを止める（プレビューWorkerが本番KVの時刻表キャッシュやpairs記録を汚染しないように） */
+  CACHE_WRITE_DISABLED?: string;
   ANALYTICS: AnalyticsEngineDataset;
   DEBUG_MODE?: string;
 }
