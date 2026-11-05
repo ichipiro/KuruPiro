@@ -136,6 +136,48 @@ describe('CachedFindTripsQuery', () => {
     expect(inner.findByStopsAndDate).toHaveBeenCalledTimes(innerCalls + 1);
   });
 
+  it('should not pin a malformed KV entry in memory', async () => {
+    const key = 'timetable:v2:origin_stop:dest_stop:20260914';
+    // GTFSTimeとして復元できない値がKVに入っている状態
+    store.set(key, JSON.stringify([{ ...timetable[0], arrivalTime: 'invalid' }]));
+    const query = new CachedFindTripsQuery(inner, kv);
+
+    await expect(
+      query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0)
+    ).rejects.toThrow();
+
+    // KV側を修復すれば次のリクエストから即復旧する（壊れた値がメモリに固定されない）
+    store.set(key, JSON.stringify([{ ...timetable[0], arrivalTime: '10:30:00' }]));
+    const recovered = await query.findByStopsAndDate(
+      originStopId,
+      destinationStopId,
+      '20260914',
+      0
+    );
+    expect(recovered).toEqual(timetable);
+  });
+
+  it('should keep hot keys in memory under eviction pressure (LRU)', async () => {
+    const query = new CachedFindTripsQuery(inner, kv);
+
+    // ホットキーを先頭に入れ、上限ちょうどまで別キーで埋める
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20269999', 0);
+    for (let i = 0; i < 255; i++) {
+      await query.findByStopsAndDate(originStopId, destinationStopId, `2026${String(i).padStart(4, '0')}`, 0);
+    }
+
+    // ホットキーに触れてから1件あふれさせる → 追い出されるのは最古の別キー
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20269999', 0);
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20260255', 0);
+
+    const innerCalls = (inner.findByStopsAndDate as ReturnType<typeof vi.fn>).mock.calls.length;
+    store.clear();
+
+    // ホットキーはメモリに残っている（D1まで落ちない）
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20269999', 0);
+    expect(inner.findByStopsAndDate).toHaveBeenCalledTimes(innerCalls);
+  });
+
   it('should use a separate cache entry per service date', async () => {
     const query = new CachedFindTripsQuery(inner, kv);
 

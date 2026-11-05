@@ -71,6 +71,11 @@ function memoryGet(key: string): SerializedTripSearchResult[] | null {
     memoryCache.delete(key);
     return null;
   }
+  // ヒットしたキーを挿入順の末尾へ移す(LRU)。これがないと、任意入力の
+  // origin/destを256通り流されただけでサイネージのホットキーが
+  // 追い出され、KV読み取り削減が静かに無効化される
+  memoryCache.delete(key);
+  memoryCache.set(key, entry);
   return entry.payload;
 }
 
@@ -146,8 +151,11 @@ export class CachedFindTripsQuery implements IFindTripsQuery {
       cached = null;
     }
     if (cached) {
+      // 復元に成功した値だけをメモリへ載せる。先に載せると、KVに壊れた値が
+      // 入ったときKV側を直してもisolateごとに最大10分エラーが固定される
+      const restored = cached.map(deserialize);
       memorySet(cacheKey, cached);
-      return cached.map(deserialize);
+      return restored;
     }
 
     const results = await this.inner.findByStopsAndDate(
