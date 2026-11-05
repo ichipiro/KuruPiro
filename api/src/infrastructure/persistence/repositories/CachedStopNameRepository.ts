@@ -100,7 +100,16 @@ export class CachedStopNameRepository implements IStopRepository {
       return names;
     }
 
-    const fetched = await this.inner.findNamesByIds(missing);
+    // 未キャッシュ分の取得に失敗しても、キャッシュ済みの名前だけは返す。
+    // ここで投げると、D1障害時に1つ新顔が混ざっただけで
+    // キャッシュ済みの現在位置まで全滅してしまう
+    let fetched: Map<string, string>;
+    try {
+      fetched = await this.inner.findNamesByIds(missing);
+    } catch (error) {
+      console.warn('Stop name lookup failed, returning cached names only:', error);
+      return names;
+    }
     for (const [stopId, name] of fetched) {
       names.set(stopId, name);
       memorySet(stopId, name);

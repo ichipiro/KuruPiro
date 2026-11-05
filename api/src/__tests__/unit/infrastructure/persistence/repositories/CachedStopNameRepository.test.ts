@@ -108,12 +108,25 @@ describe('CachedStopNameRepository', () => {
       expect(inner.findNamesByIds).toHaveBeenCalledTimes(2);
     });
 
-    it('innerのエラーはそのまま伝播する（呼び出し側でフォールバック判断）', async () => {
+    it('innerの失敗時はキャッシュ済みの名前だけを返す（部分結果）', async () => {
+      await repo.findNamesByIds([StopId.fromString('stop_a')]);
       vi.mocked(inner.findNamesByIds).mockRejectedValue(new Error('D1_ERROR'));
 
-      await expect(
-        repo.findNamesByIds([StopId.fromString('stop_x')])
-      ).rejects.toThrow('D1_ERROR');
+      const result = await repo.findNamesByIds([
+        StopId.fromString('stop_a'),
+        StopId.fromString('stop_new'),
+      ]);
+
+      // D1が落ちていても、キャッシュ済みのstop_aまで全滅させない
+      expect(result.get('stop_a')).toBe('停留所A');
+      expect(result.has('stop_new')).toBe(false);
+    });
+
+    it('全てミスでinnerが失敗した場合は空Mapを返す（throwしない）', async () => {
+      vi.mocked(inner.findNamesByIds).mockRejectedValue(new Error('D1_ERROR'));
+
+      const result = await repo.findNamesByIds([StopId.fromString('stop_x')]);
+      expect(result.size).toBe(0);
     });
   });
 
