@@ -26,6 +26,70 @@ const KEY_PREFIX = 'timetable:v2';
 const CACHE_TTL_SECONDS = 3600;
 
 /**
+ * isolateメモリ上の時刻表キャッシュの保持時間（ミリ秒）: 10分
+ *
+ * KV読み取りの大半はサイネージの15秒ポーリング（方面数×端末数）で、
+ * 2026-11-05に無料枠(10万read/日)の50%警告が届いた。ポーリング自体が
+ * isolateを温め続けるため、メモリに持つだけで定常時のKV読み取りを
+ * ほぼゼロにでき、端末が増えてもKV使用量が増えない。
+ *
+ * KVのTTL(1時間)より短くしているのは、ダイヤ改正時にGitHub Actionsが
+ * KVへ新時刻表を直接配信する経路があり、メモリ保持が長いほど
+ * その反映が遅れるため。
+ */
+const MEMORY_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * メモリキャッシュのエントリ数上限
+ *
+ * origin/destinationは任意入力なので、未知の組み合わせを投げ続けられても
+ * isolateのメモリが際限なく育たないよう、超過時は挿入が古いものから捨てる。
+ * 実際に使われる組み合わせ×日付は数十程度でこの上限には届かない。
+ */
+const MEMORY_MAX_ENTRIES = 256;
+
+/** キャッシュキー → { 失効時刻, KVと同じシリアライズ形式の時刻表 } */
+const memoryCache = new Map<
+  string,
+  { expiresAt: number; payload: SerializedTripSearchResult[] }
+>();
+
+/**
+ * メモリキャッシュを空にする（テスト用）
+ *
+ * モジュールレベルの状態はテストケースをまたいで残るため、
+ * beforeEachで呼んで独立性を保つ。
+ */
+export function clearTimetableMemoryCache(): void {
+  memoryCache.clear();
+}
+
+function memoryGet(key: string): SerializedTripSearchResult[] | null {
+  const entry = memoryCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    memoryCache.delete(key);
+    return null;
+  }
+  // ヒットしたキーを挿入順の末尾へ移す(LRU)。これがないと、任意入力の
+  // origin/destを256通り流されただけでサイネージのホットキーが
+  // 追い出され、KV読み取り削減が静かに無効化される
+  memoryCache.delete(key);
+  memoryCache.set(key, entry);
+  return entry.payload;
+}
+
+function memorySet(key: string, payload: SerializedTripSearchResult[]): void {
+  if (!memoryCache.has(key) && memoryCache.size >= MEMORY_MAX_ENTRIES) {
+    const oldest = memoryCache.keys().next().value;
+    if (oldest !== undefined) {
+      memoryCache.delete(oldest);
+    }
+  }
+  memoryCache.set(key, { expiresAt: Date.now() + MEMORY_TTL_MS, payload });
+}
+
+/**
  * 「実際に使われた出発地×目的地」を記録するキーの名前空間
  *
  * ダイヤ改正時、GitHub Actionsがこのキー一覧から使用中の組み合わせを
@@ -43,7 +107,7 @@ const PAIR_KEY_PREFIX = 'pairs:v1';
 const PAIR_TTL_SECONDS = 30 * 24 * 3600;
 
 /**
- * 曜日ごとの時刻表をKVでキャッシュするデコレーター
+ * 曜日ごとの時刻表を isolateメモリ → KV → D1 の3層でキャッシュするデコレーター
  *
  * 「その曜日に出発地→目的地を走る便と予定時刻」はGTFS静的データが
  * 更新されるまで変化しないため、D1に問い合わせるのは初回だけで済みます。
@@ -73,7 +137,13 @@ export class CachedFindTripsQuery implements IFindTripsQuery {
 
     const cacheKey = this.buildCacheKey(originStopId, destinationStopId, serviceDate);
 
-    // KVの読み取り失敗はキャッシュミスとして扱う
+    // 第1層: isolateメモリ（KV読み取りを消費しない）
+    const fromMemory = memoryGet(cacheKey);
+    if (fromMemory) {
+      return fromMemory.map(deserialize);
+    }
+
+    // 第2層: KV。読み取り失敗はキャッシュミスとして扱う
     let cached: SerializedTripSearchResult[] | null = null;
     try {
       cached = await this.kv.get<SerializedTripSearchResult[]>(cacheKey, 'json');
@@ -81,7 +151,11 @@ export class CachedFindTripsQuery implements IFindTripsQuery {
       cached = null;
     }
     if (cached) {
-      return cached.map(deserialize);
+      // 復元に成功した値だけをメモリへ載せる。先に載せると、KVに壊れた値が
+      // 入ったときKV側を直してもisolateごとに最大10分エラーが固定される
+      const restored = cached.map(deserialize);
+      memorySet(cacheKey, cached);
+      return restored;
     }
 
     const results = await this.inner.findByStopsAndDate(
@@ -91,11 +165,14 @@ export class CachedFindTripsQuery implements IFindTripsQuery {
       weekday
     );
 
+    const payload = results.map(serialize);
+    memorySet(cacheKey, payload);
+
     // レスポンス返却をブロックしないよう、書き込みはwaitUntilに逃がす。
     // KVの書き込み失敗はキャッシュされないだけなので握りつぶす。
     const background = Promise.all([
       this.kv
-        .put(cacheKey, JSON.stringify(results.map(serialize)), {
+        .put(cacheKey, JSON.stringify(payload), {
           expirationTtl: CACHE_TTL_SECONDS,
         })
         .catch(() => {}),

@@ -1,5 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CachedFindTripsQuery } from '@/infrastructure/persistence/queries/CachedFindTripsQuery';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  CachedFindTripsQuery,
+  clearTimetableMemoryCache,
+} from '@/infrastructure/persistence/queries/CachedFindTripsQuery';
 import { StopId } from '@/domain/value-objects/identifiers';
 import { GTFSTime } from '@/domain/value-objects/time';
 import type { IFindTripsQuery, TripSearchResult } from '@/domain/queries';
@@ -26,6 +29,8 @@ describe('CachedFindTripsQuery', () => {
   let kv: KVNamespace;
 
   beforeEach(() => {
+    // メモリキャッシュはモジュールレベルの状態なので、テストごとに空にして独立させる
+    clearTimetableMemoryCache();
     inner = { findByStopsAndDate: vi.fn().mockResolvedValue(timetable) };
     store = new Map();
 
@@ -52,6 +57,125 @@ describe('CachedFindTripsQuery', () => {
     // GTFSTime まで含めて復元できていること
     expect(second).toEqual(timetable);
     expect(second[0].arrivalTime.toString()).toBe('10:30:00');
+  });
+
+  it('should serve repeat requests from isolate memory without touching KV', async () => {
+    const query = new CachedFindTripsQuery(inner, kv);
+
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+    // 初回で時刻表キー1回 + 組み合わせ記録キー1回のKV読み取りが発生する
+    expect(kv.get).toHaveBeenCalledTimes(2);
+
+    const second = await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+
+    // 2回目はメモリから返り、KV読み取りが増えない（無料枠対策の本体）
+    expect(kv.get).toHaveBeenCalledTimes(2);
+    expect(second).toEqual(timetable);
+  });
+
+  it('should populate memory from a KV hit so later requests skip KV too', async () => {
+    store.set(
+      'timetable:v2:origin_stop:dest_stop:20260914',
+      JSON.stringify([{ ...timetable[0], arrivalTime: '10:30:00' }])
+    );
+    const query = new CachedFindTripsQuery(inner, kv);
+
+    const first = await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+    const second = await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+
+    expect(inner.findByStopsAndDate).not.toHaveBeenCalled();
+    // KVを読むのは初回の1回だけ（KVヒット時はregisterPairを通らない）
+    expect(kv.get).toHaveBeenCalledTimes(1);
+    expect(first).toEqual(timetable);
+    expect(second).toEqual(timetable);
+  });
+
+  describe('memory TTL', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should fall back to KV after the memory TTL expires', async () => {
+      vi.useFakeTimers();
+      const query = new CachedFindTripsQuery(inner, kv);
+
+      await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+      const getsAfterFirst = (kv.get as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      // メモリTTL(10分)を超えると、ダイヤ改正でKVへ直接配信された
+      // 新時刻表を拾い直せるようKVまで読みに行く
+      vi.advanceTimersByTime(11 * 60 * 1000);
+      await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+
+      expect((kv.get as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(
+        getsAfterFirst
+      );
+      // KVにはまだ生きたエントリがあるので、D1(inner)までは落ちない
+      expect(inner.findByStopsAndDate).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('should evict the oldest memory entry when the cap is exceeded', async () => {
+    const query = new CachedFindTripsQuery(inner, kv);
+
+    // 上限(256)+1件の異なるキーを流し込む
+    for (let i = 0; i <= 256; i++) {
+      await query.findByStopsAndDate(originStopId, destinationStopId, `2026${String(i).padStart(4, '0')}`, 0);
+    }
+    const innerCalls = (inner.findByStopsAndDate as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    // KVも空にして、メモリに残っているかどうかだけが結果を左右する状態にする
+    store.clear();
+
+    // 最古のキーは追い出されているのでD1まで落ちる
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20260000', 0);
+    expect(inner.findByStopsAndDate).toHaveBeenCalledTimes(innerCalls + 1);
+
+    // 直近のキーはメモリに残っている
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20260256', 0);
+    expect(inner.findByStopsAndDate).toHaveBeenCalledTimes(innerCalls + 1);
+  });
+
+  it('should not pin a malformed KV entry in memory', async () => {
+    const key = 'timetable:v2:origin_stop:dest_stop:20260914';
+    // GTFSTimeとして復元できない値がKVに入っている状態
+    store.set(key, JSON.stringify([{ ...timetable[0], arrivalTime: 'invalid' }]));
+    const query = new CachedFindTripsQuery(inner, kv);
+
+    await expect(
+      query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0)
+    ).rejects.toThrow();
+
+    // KV側を修復すれば次のリクエストから即復旧する（壊れた値がメモリに固定されない）
+    store.set(key, JSON.stringify([{ ...timetable[0], arrivalTime: '10:30:00' }]));
+    const recovered = await query.findByStopsAndDate(
+      originStopId,
+      destinationStopId,
+      '20260914',
+      0
+    );
+    expect(recovered).toEqual(timetable);
+  });
+
+  it('should keep hot keys in memory under eviction pressure (LRU)', async () => {
+    const query = new CachedFindTripsQuery(inner, kv);
+
+    // ホットキーを先頭に入れ、上限ちょうどまで別キーで埋める
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20269999', 0);
+    for (let i = 0; i < 255; i++) {
+      await query.findByStopsAndDate(originStopId, destinationStopId, `2026${String(i).padStart(4, '0')}`, 0);
+    }
+
+    // ホットキーに触れてから1件あふれさせる → 追い出されるのは最古の別キー
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20269999', 0);
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20260255', 0);
+
+    const innerCalls = (inner.findByStopsAndDate as ReturnType<typeof vi.fn>).mock.calls.length;
+    store.clear();
+
+    // ホットキーはメモリに残っている（D1まで落ちない）
+    await query.findByStopsAndDate(originStopId, destinationStopId, '20269999', 0);
+    expect(inner.findByStopsAndDate).toHaveBeenCalledTimes(innerCalls);
   });
 
   it('should use a separate cache entry per service date', async () => {
