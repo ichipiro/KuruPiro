@@ -245,9 +245,17 @@ export class FindNextBusesUseCase {
       return locations;
     }
 
-    const stopNames = await this.stopRepo.findNamesByIds([
-      ...currentStopIdByTripId.values(),
-    ]);
+    // 現在位置は補助情報: D1障害（取り込み期間の日次上限超過など）で名前が
+    // 引けなくても、時刻表・遅延は返せるためリクエスト全体を失敗させない
+    let stopNames: Map<string, string>;
+    try {
+      stopNames = await this.stopRepo.findNamesByIds([
+        ...currentStopIdByTripId.values(),
+      ]);
+    } catch (error) {
+      console.warn('Stop name lookup failed, omitting current locations:', error);
+      return locations;
+    }
 
     for (const [tripId, stopId] of currentStopIdByTripId) {
       const stopName = stopNames.get(stopId.value);

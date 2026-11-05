@@ -297,7 +297,7 @@ describe('FindNextBusesUseCase', () => {
       expect(result.map((bus) => bus.currentLocation)).toEqual(['停留所A', '停留所B']);
     });
 
-    it('深夜0〜2時台は前日サービスの25:xx便を正しい残り時間で返す（+24hズレ回帰テスト）', async () => {
+it('深夜0〜2時台は前日サービスの25:xx便を正しい残り時間で返す（+24hズレ回帰テスト）', async () => {
       // 火曜1:00の検索は前日(月曜)サービスの時刻表(25:30 = 実際は火曜1:30)を返す。
       // 基準日を現在日(火曜)のままにすると withTime の日またぎ加算が重複して
       // 水曜1:30到着(あと約1470分)になるバグがあった
@@ -369,6 +369,64 @@ describe('FindNextBusesUseCase', () => {
       expect(result).toHaveLength(1);
       expect(result[0].actualArrival).toBe('10:30');
       expect(result[0].remainingMinutes).toBe(30);
+    });
+
+    it('should return buses without current locations when stop name lookup fails', async () => {
+      // D1障害（日次上限超過など）でも時刻表・遅延は返す。現在位置だけ空にする
+      const buildTripUpdate = (tripId: string, currentStopId: string) => ({
+        tripId: { value: tripId },
+        stopTimeUpdates: [],
+        findStopTimeUpdate: () => ({
+          stopSequence: 5,
+          getRepresentativeDelay: () => ({
+            toSeconds: () => 0,
+            toDisplayString: () => '',
+            hasDelay: () => false,
+          }),
+          arrivalTime: undefined,
+          departureTime: undefined,
+        }),
+        getCurrentStopId: () => StopId.fromString(currentStopId),
+        getCurrentStopSequence: () => 4,
+      });
+
+      const mockResults: TripSearchResult[] = [
+        {
+          tripId: 'trip1',
+          arrivalTime: GTFSTime.fromString('10:30:00'),
+          stopSequence: 5,
+          routeShortName: '1',
+          destinationStopId: 'dest_stop',
+          destinationLabel: '終点',
+          serviceId: 'weekday',
+        },
+      ];
+
+      vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
+      vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockResolvedValue(
+        new Map([['trip1', buildTripUpdate('trip1', 'stop_a') as any]])
+      );
+      vi.mocked(mockStopRepo.findNamesByIds).mockRejectedValue(
+        new Error('D1_ERROR: daily limit exceeded')
+      );
+
+      useCase = new FindNextBusesUseCase(
+        mockTripFinder,
+        mockTimeCalculation,
+        mockStopRepo,
+        mockStopTimeRepo,
+        mockRealtimeRepo
+      );
+
+      const result = await useCase.execute(
+        StopId.fromString('origin_stop'),
+        [StopId.fromString('dest_stop')],
+        JSTDateTime.fromComponents(2025, 1, 6, 10, 0, 0)
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].currentLocation).toBe('');
+      expect(result[0].scheduledArrival).toBe('10:30');
     });
 
     it('should fetch stop times for all trips in a single query when filtering by via stops', async () => {

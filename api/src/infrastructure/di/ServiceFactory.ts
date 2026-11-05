@@ -1,6 +1,7 @@
 import { FindTripsQuery } from '@/infrastructure/persistence/queries/FindTripsQuery';
 import { CachedFindTripsQuery } from '@/infrastructure/persistence/queries/CachedFindTripsQuery';
 import { DrizzleStopRepository } from '@/infrastructure/persistence/repositories/DrizzleStopRepository';
+import { CachedStopNameRepository } from '@/infrastructure/persistence/repositories/CachedStopNameRepository';
 import { DrizzleRouteRepository } from '@/infrastructure/persistence/repositories/DrizzleRouteRepository';
 import { DrizzleTripRepository } from '@/infrastructure/persistence/repositories/DrizzleTripRepository';
 import { DrizzleStopTimeRepository } from '@/infrastructure/persistence/repositories/DrizzleStopTimeRepository';
@@ -62,7 +63,11 @@ export class ServiceFactory {
 
   getStopRepository(): IStopRepository {
     if (!this.stopRepo) {
-      this.stopRepo = new DrizzleStopRepository(this.env.DB);
+      // 停留所名は改正まで不変なのでisolateメモリでキャッシュし、
+      // ウォーム経路のリクエスト毎D1クエリをなくす
+      this.stopRepo = new CachedStopNameRepository(
+        new DrizzleStopRepository(this.env.DB)
+      );
     }
     return this.stopRepo;
   }
