@@ -95,38 +95,19 @@ export class TripFinderService {
   } {
     const hour = dateTime.hour;
 
-    // 深夜0～2時台は前日の24時以降として扱う（GTFSの慣習）
-    if (hour >= 0 && hour < 3) {
-      // 前日の日付を取得
-      const previousDay = JSTDateTime.fromComponents(
-        dateTime.year,
-        dateTime.month,
-        dateTime.day,
-        dateTime.hour,
-        dateTime.minute,
-        dateTime.second
-      ).addHours(-24);
-
-      const weekday = previousDay.getWeekday();
-      const gtfsHour = hour + 24;
-      const gtfsTime = GTFSTime.fromComponents(
-        gtfsHour,
-        dateTime.minute,
-        dateTime.second
-      );
-
-      return { serviceDate: formatServiceDate(previousDay), weekday, gtfsTime };
-    }
-
-    // 通常の時間帯
-    const weekday = dateTime.getWeekday();
+    // 深夜0～2時台は前日の24時以降として扱う（GTFSの慣習）。
+    // 「どの日をサービス日とするか」の規則は JSTDateTime.serviceDayStart に
+    // 集約されており、到着時刻計算（FindNextBusesUseCase）も同じ基準日を使う
+    const serviceDay = dateTime.serviceDayStart();
+    const weekday = serviceDay.getWeekday();
+    const gtfsHour = hour < 3 ? hour + 24 : hour;
     const gtfsTime = GTFSTime.fromComponents(
-      hour,
+      gtfsHour,
       dateTime.minute,
       dateTime.second
     );
 
-    return { serviceDate: formatServiceDate(dateTime), weekday, gtfsTime };
+    return { serviceDate: formatServiceDate(serviceDay), weekday, gtfsTime };
   }
 }
 

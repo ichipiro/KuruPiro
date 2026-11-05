@@ -297,6 +297,80 @@ describe('FindNextBusesUseCase', () => {
       expect(result.map((bus) => bus.currentLocation)).toEqual(['停留所A', '停留所B']);
     });
 
+    it('深夜0〜2時台は前日サービスの25:xx便を正しい残り時間で返す（+24hズレ回帰テスト）', async () => {
+      // 火曜1:00の検索は前日(月曜)サービスの時刻表(25:30 = 実際は火曜1:30)を返す。
+      // 基準日を現在日(火曜)のままにすると withTime の日またぎ加算が重複して
+      // 水曜1:30到着(あと約1470分)になるバグがあった
+      const mockResults: TripSearchResult[] = [
+        {
+          tripId: 'late_trip',
+          arrivalTime: GTFSTime.fromString('25:30:00'),
+          stopSequence: 5,
+          routeShortName: '1',
+          destinationStopId: 'dest_stop',
+          destinationLabel: '終点',
+          serviceId: 'weekday',
+        },
+      ];
+
+      vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
+      vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockResolvedValue(new Map());
+
+      useCase = new FindNextBusesUseCase(
+        mockTripFinder,
+        mockTimeCalculation,
+        mockStopRepo,
+        mockStopTimeRepo,
+        mockRealtimeRepo
+      );
+
+      const result = await useCase.execute(
+        StopId.fromString('origin_stop'),
+        [StopId.fromString('dest_stop')],
+        JSTDateTime.fromComponents(2026, 11, 3, 1, 0, 0) // 火曜 1:00 JST
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].actualArrival).toBe('01:30');
+      expect(result[0].remainingMinutes).toBe(30);
+      expect(result[0].remainingTime).toBe('あと30分');
+    });
+
+    it('3時以降の基準日はこれまで通り当日（日中の挙動は不変）', async () => {
+      const mockResults: TripSearchResult[] = [
+        {
+          tripId: 'day_trip',
+          arrivalTime: GTFSTime.fromString('10:30:00'),
+          stopSequence: 5,
+          routeShortName: '1',
+          destinationStopId: 'dest_stop',
+          destinationLabel: '終点',
+          serviceId: 'weekday',
+        },
+      ];
+
+      vi.mocked(mockTripFinder.findTrips).mockResolvedValue(mockResults);
+      vi.mocked(mockRealtimeRepo.getTripUpdatesForTrips).mockResolvedValue(new Map());
+
+      useCase = new FindNextBusesUseCase(
+        mockTripFinder,
+        mockTimeCalculation,
+        mockStopRepo,
+        mockStopTimeRepo,
+        mockRealtimeRepo
+      );
+
+      const result = await useCase.execute(
+        StopId.fromString('origin_stop'),
+        [StopId.fromString('dest_stop')],
+        JSTDateTime.fromComponents(2026, 11, 3, 10, 0, 0)
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].actualArrival).toBe('10:30');
+      expect(result[0].remainingMinutes).toBe(30);
+    });
+
     it('should fetch stop times for all trips in a single query when filtering by via stops', async () => {
       const buildStopTimes = (tripId: string) =>
         ['origin_stop', 'via_stop', 'dest_stop'].map((stopId, index) => ({

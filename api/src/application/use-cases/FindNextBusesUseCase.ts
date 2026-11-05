@@ -98,14 +98,10 @@ export class FindNextBusesUseCase {
     );
 
     // 3. 基準日を一度だけ計算（パフォーマンス最適化）
-    const baseDate = JSTDateTime.fromComponents(
-      currentDateTime.year,
-      currentDateTime.month,
-      currentDateTime.day,
-      0,
-      0,
-      0
-    );
+    //    0〜2時台の検索は前日サービスの時刻（25:30など）が返るため、
+    //    基準日も検索と同じサービス日にそろえる。現在日のままだと
+    //    withTime の日またぎ加算が重複し、到着時刻が+24時間ズレる
+    const baseDate = currentDateTime.serviceDayStart();
 
     // 4. 各トリップを NextBusDTO に変換
     const buses = filteredTripResults.map((tripResult) => {
