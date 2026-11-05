@@ -121,7 +121,8 @@ export class ServiceFactory {
       this.findTripsQuery = new CachedFindTripsQuery(
         new FindTripsQuery(this.env.DB),
         this.env.GTFS_CACHE,
-        this.ctx
+        this.ctx,
+        this.env.CACHE_WRITE_DISABLED === 'true'
       );
     }
     return this.findTripsQuery;

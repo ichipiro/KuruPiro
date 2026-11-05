@@ -42,7 +42,9 @@ jobs:
         run: |
           cd api
           # Deploy with custom name for branch-specific worker
-          pnpm wrangler deploy --name ${{ steps.sanitize.outputs.worker_name }} --var REALTIME_POLLER_ENABLED:false
+          # CACHE_WRITE_DISABLED: プレビューは本番KVを共有しているため、
+          # 時刻表キャッシュ・pairs記録の書き込みを止めて本番を汚染しない
+          pnpm wrangler deploy --name ${{ steps.sanitize.outputs.worker_name }} --var REALTIME_POLLER_ENABLED:false CACHE_WRITE_DISABLED:true
 
       - name: Comment on PR
         uses: actions/github-script@v7

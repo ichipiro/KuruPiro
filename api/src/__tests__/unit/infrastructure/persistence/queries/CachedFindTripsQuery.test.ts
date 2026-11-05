@@ -126,6 +126,46 @@ describe('CachedFindTripsQuery', () => {
     });
   });
 
+  describe('writesDisabled（プレビューWorker用）', () => {
+    it('KVへの書き込み（時刻表put・pairs記録）を一切行わない', async () => {
+      const query = new CachedFindTripsQuery(inner, kv, undefined, true);
+
+      await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+
+      expect(inner.findByStopsAndDate).toHaveBeenCalledOnce();
+      expect(kv.put).not.toHaveBeenCalled();
+      // pairs記録の存在確認get(registerPair)も走らない。読むのは時刻表キーの1回だけ
+      expect(kv.get).toHaveBeenCalledTimes(1);
+      expect(store.size).toBe(0);
+    });
+
+    it('KVの読み取りとisolateメモリは通常どおり効く', async () => {
+      store.set(
+        'timetable:v2:origin_stop:dest_stop:20260914',
+        JSON.stringify([{ ...timetable[0], arrivalTime: '10:30:00' }])
+      );
+      const query = new CachedFindTripsQuery(inner, kv, undefined, true);
+
+      const first = await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+      const second = await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+
+      expect(inner.findByStopsAndDate).not.toHaveBeenCalled();
+      expect(kv.get).toHaveBeenCalledTimes(1); // 2回目はメモリヒット
+      expect(first).toEqual(timetable);
+      expect(second).toEqual(timetable);
+    });
+
+    it('D1ミス後の再リクエストはメモリから返る（KVに書けなくても再クエリしない）', async () => {
+      const query = new CachedFindTripsQuery(inner, kv, undefined, true);
+
+      await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+      const second = await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+
+      expect(inner.findByStopsAndDate).toHaveBeenCalledOnce();
+      expect(second).toEqual(timetable);
+    });
+  });
+
   describe('memory TTL', () => {
     afterEach(() => {
       vi.useRealTimers();
