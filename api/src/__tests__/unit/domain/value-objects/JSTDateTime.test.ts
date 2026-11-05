@@ -190,6 +190,54 @@ describe('JSTDateTime', () => {
     });
   });
 
+  describe('serviceDayStart', () => {
+    it('3時以降は当日の0時を返す', () => {
+      const morning = JSTDateTime.fromComponents(2026, 11, 4, 3, 0, 0);
+      const start = morning.serviceDayStart();
+      expect([start.year, start.month, start.day]).toEqual([2026, 11, 4]);
+      expect([start.hour, start.minute, start.second]).toEqual([0, 0, 0]);
+
+      const daytime = JSTDateTime.fromComponents(2026, 11, 4, 10, 30, 15);
+      const dayStart = daytime.serviceDayStart();
+      expect([dayStart.year, dayStart.month, dayStart.day]).toEqual([2026, 11, 4]);
+      expect(dayStart.hour).toBe(0);
+
+      const night = JSTDateTime.fromComponents(2026, 11, 4, 23, 59, 59);
+      expect(night.serviceDayStart().day).toBe(4);
+    });
+
+    it('深夜0〜2時台は前日の0時を返す（GTFSの前日24時以降扱い）', () => {
+      const midnight = JSTDateTime.fromComponents(2026, 11, 4, 0, 0, 0);
+      expect(midnight.serviceDayStart().day).toBe(3);
+
+      const lateNight = JSTDateTime.fromComponents(2026, 11, 4, 1, 30, 0);
+      const start = lateNight.serviceDayStart();
+      expect([start.year, start.month, start.day]).toEqual([2026, 11, 3]);
+      expect([start.hour, start.minute, start.second]).toEqual([0, 0, 0]);
+
+      const edge = JSTDateTime.fromComponents(2026, 11, 4, 2, 59, 59);
+      expect(edge.serviceDayStart().day).toBe(3);
+    });
+
+    it('月初・年初の深夜も正しく前日に戻る', () => {
+      const monthEdge = JSTDateTime.fromComponents(2026, 11, 1, 1, 0, 0);
+      const monthStart = monthEdge.serviceDayStart();
+      expect([monthStart.year, monthStart.month, monthStart.day]).toEqual([2026, 10, 31]);
+
+      const yearEdge = JSTDateTime.fromComponents(2027, 1, 1, 0, 30, 0);
+      const yearStart = yearEdge.serviceDayStart();
+      expect([yearStart.year, yearStart.month, yearStart.day]).toEqual([2026, 12, 31]);
+    });
+
+    it('検索規則との整合: サービス日のwithTime(25:30)が実際の深夜1:30になる', () => {
+      // 火曜1:00に検索すると前日(月曜)サービスの25:30便が返る。
+      // serviceDayStart(月曜0:00)にwithTimeを適用すると火曜1:30になる
+      const tuesday1am = JSTDateTime.fromComponents(2026, 11, 3, 1, 0, 0);
+      const arrival = tuesday1am.serviceDayStart().withTime(GTFSTime.fromString('25:30:00'));
+      expect([arrival.month, arrival.day, arrival.hour, arrival.minute]).toEqual([11, 3, 1, 30]);
+    });
+  });
+
   describe('getWeekday', () => {
     it('月曜日は0を返す', () => {
       const jst = JSTDateTime.fromComponents(2024, 1, 15); // 月曜日

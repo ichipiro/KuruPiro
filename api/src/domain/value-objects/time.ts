@@ -390,6 +390,22 @@ export class JSTDateTime {
   }
 
   /**
+   * GTFSのサービス日の0時を返す
+   *
+   * GTFSでは深夜0〜2時台を「前日の24時以降」として扱うため、
+   * 0〜2時台は前日の0時を返します。時刻表検索（TripFinderService）と
+   * 到着時刻計算（FindNextBusesUseCase）がこの同じ基準日を共有しないと、
+   * 25:30のような前日サービスの時刻に withTime を適用したとき
+   * 到着時刻が+24時間ズレます。
+   *
+   * 例: 火曜 1:30 → 月曜 0:00 / 火曜 10:00 → 火曜 0:00
+   */
+  serviceDayStart(): JSTDateTime {
+    const base = this.hour < 3 ? this.addHours(-24) : this;
+    return JSTDateTime.fromComponents(base.year, base.month, base.day, 0, 0, 0);
+  }
+
+  /**
    * 曜日を取得（0=月曜日, 1=火曜日, ..., 6=日曜日）
    * JavaScriptのgetDay()とは異なり、月曜日を0とします（GTFS仕様に合わせる）
    */
