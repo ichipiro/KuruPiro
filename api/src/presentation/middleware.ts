@@ -2,27 +2,17 @@
  * Honoミドルウェアを集約したファイル
  *
  * 含まれるミドルウェア:
- * - errorHandler: エラーハンドリング
  * - injectServiceFactory: ServiceFactory注入
+ *
+ * エラーハンドリングはここではなく index.ts の app.onError で行う。
+ * Honoはハンドラー内のthrowをミドルウェアのtry/catchへ伝播させないため、
+ * ミドルウェア方式のerrorHandlerは一度も実行されない死にコードだった。
  */
 
 import type { Context, Next } from 'hono';
 import type { Env } from '@/types';
 import { ServiceFactory } from '@/infrastructure/di/ServiceFactory';
-import { BadRequestError } from '@/presentation/errors';
 
-export async function errorHandler(c: Context, next: Next): Promise<Response | void> {
-  try {
-    await next();
-  } catch (error) {
-    if (error instanceof BadRequestError) {
-      return c.json({ error: error.message }, 400);
-    }
-    console.error('Unhandled error:', error);
-    const message = error instanceof Error ? error.message : 'Internal Server Error';
-    return c.json({ error: message }, 500);
-  }
-}
 /**
  * ServiceFactoryをコンテキストに注入するミドルウェア
  *

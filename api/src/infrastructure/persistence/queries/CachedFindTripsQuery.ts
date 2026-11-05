@@ -168,6 +168,15 @@ export class CachedFindTripsQuery implements IFindTripsQuery {
     const payload = results.map(serialize);
     memorySet(cacheKey, payload);
 
+    // 結果が空のペアはKVに書かず、pairs記録もしない。存在しない組み合わせを
+    // 投げ続けられると、KV書き込み(無料枠1,000/日で最もタイト)が空エントリで
+    // 枯れ、pairs:v1レジストリも実在しないペアで汚れてダイヤ改正時のKV直接
+    // 配信対象(上限100件)から実ペアを押し出しうる。正当な空(運休日など)は
+    // isolateメモリ(10分)が吸収するため、D1へ毎回行くことにはならない
+    if (payload.length === 0) {
+      return results;
+    }
+
     // レスポンス返却をブロックしないよう、書き込みはwaitUntilに逃がす。
     // KVの書き込み失敗はキャッシュされないだけなので握りつぶす。
     const background = Promise.all([

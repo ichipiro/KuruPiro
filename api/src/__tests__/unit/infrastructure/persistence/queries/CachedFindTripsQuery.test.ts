@@ -90,6 +90,42 @@ describe('CachedFindTripsQuery', () => {
     expect(second).toEqual(timetable);
   });
 
+  describe('空結果の扱い', () => {
+    it('結果が空のペアはKVに書かずpairs記録もしない（write枠の防御）', async () => {
+      inner = { findByStopsAndDate: vi.fn().mockResolvedValue([]) };
+      const query = new CachedFindTripsQuery(inner, kv);
+
+      const result = await query.findByStopsAndDate(
+        originStopId,
+        destinationStopId,
+        '20260914',
+        0
+      );
+
+      expect(result).toEqual([]);
+      expect(kv.put).not.toHaveBeenCalled();
+      // registerPairの存在確認getも走らない（時刻表キーの1回のみ）
+      expect(kv.get).toHaveBeenCalledTimes(1);
+      expect(store.size).toBe(0);
+    });
+
+    it('空結果もisolateメモリには載り、再リクエストでD1へ行かない', async () => {
+      inner = { findByStopsAndDate: vi.fn().mockResolvedValue([]) };
+      const query = new CachedFindTripsQuery(inner, kv);
+
+      await query.findByStopsAndDate(originStopId, destinationStopId, '20260914', 0);
+      const second = await query.findByStopsAndDate(
+        originStopId,
+        destinationStopId,
+        '20260914',
+        0
+      );
+
+      expect(second).toEqual([]);
+      expect(inner.findByStopsAndDate).toHaveBeenCalledOnce();
+    });
+  });
+
   describe('memory TTL', () => {
     afterEach(() => {
       vi.useRealTimers();
