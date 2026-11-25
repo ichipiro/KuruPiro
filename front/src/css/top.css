@@ -34,7 +34,7 @@ p {
 .NextBusesListCell {
 	background-color: white;
 	display: flex;
-	flex-direction: none;
+	flex-direction: column;
 	color: black;
 	margin: 6%;
 	width: 85%;
@@ -45,30 +45,96 @@ p {
 }
 
 .NextBusesListCell p {
-	position: absolute;
+	/* position: absolute; */
 	display: inline-block;
+	text-align: left;
 }
 
-.BusName {
+.BusName.ViaYokogawa{
+	/* color: whitesmoke; */
+	display: flex;
+	flex-direction: row;
+	/* align-items: left; */
+	/* width: 50%; */
+	font-size: 0.9em;
+	background-color: darkolivegreen;
+	border: 3px solid darkolivegreen;
+	width: fit-content;
+}
+
+.BusName.ViaNakahiro{
+	/* color: whitesmoke; */
+	display: flex;
+	flex-direction: row;
+	/* align-items: left; */
+	/* width: 50%; */
+	font-size: 0.9em;
+	background-color: blueviolet;
+	border: 3px solid blueviolet;
+	width: fit-content;
+}
+
+.BusShortId {
 	text-align: left;
 	font-weight: bold;
 	margin: 0;
 	padding: 1px;
-	background-color: darkolivegreen;
+	padding-right: 0.2rem;
 	color: white;
 }
 
+.BusDestination.ViaYokogawa {
+	text-align: left;
+	font-weight: bold;
+	margin: 0;
+	padding: 1px;
+	background-color: white;
+	color: darkolivegreen;
+}
+
+.BusDestination.ViaNakahiro {
+	text-align: left;
+	font-weight: bold;
+	margin: 0;
+	padding: 1px;
+	background-color: white;
+	color: blueviolet;
+}
+
+.BusArrivalTime {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	margin-top: 1%;
+}
+
+.ViaStopAndRemainingMinutes {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+}
+
+.ViaStop {
+	font-size: 0.8em;
+	margin-bottom: 0.25em;
+}
+
 .StaticTime {
-	margin-top: 40px;
+	font-size: 1.5em;
+	font-weight: bold;
+	/* margin-top: 20px; */
 }
 
 .RemainingMinutes {
-	margin-top: 60px;
+	/* margin-top: 60px; */
+	font-size: 0.8em;
+}
+
+.CurrentLocation {
+	font-size: 0.7em;
 }
 
 .DelayMinutes {
-	margin-top: 40px;
-	margin-left: 50px;
 	color: red;
 }
 

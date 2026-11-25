@@ -57,10 +57,19 @@ function NextBusesList() {
             <p className="StopName">市立大学前</p>
             {piroData.map((element: BusService, index: number) => (
               <div key={index} className="NextBusesListCell">
-                <p className="BusName">{element.trip_short_id}<br />{element.trip_dest}</p>
-                <p className="StaticTime">{element.arrival_time}</p>
-                <p className="RemainingMinutes">{element.remaining_time}</p>
-                <p className="DelayMinutes">{element.delay}</p>
+                <div className={element.trip_short_id === "63" || element.trip_short_id === "65"  || element.trip_short_id === "61" ? "BusName ViaYokogawa" : "BusName ViaNakahiro"}>
+                  <p className="BusShortId">{element.trip_short_id}</p>
+                  <p className={element.trip_short_id === "63" || element.trip_short_id === "65"  || element.trip_short_id === "61" ? "BusDestination ViaYokogawa" : "BusDestination ViaNakahiro"}>{element.trip_dest}</p>
+                </div>
+                <div className='BusArrivalTime'>
+                  <p className="StaticTime">{element.arrival_time}</p>
+                  <p className="DelayMinutes">{element.delay}</p>
+                </div>
+                <div className='ViaStopAndRemainingMinutes'>
+                  <p className="ViaStop">{element.trip_short_id === "63" || element.trip_short_id === "65"  || element.trip_short_id === "61" ? "横川駅前経由" : "中広町経由"}</p>
+                  <p className="RemainingMinutes">{element.remaining_time}</p>
+                </div>
+                <p className='CurrentLocation'>{element.current_location != "" ? element.current_location +"を通過": "発車待ち"}</p>
               </div>
             ))}
           </div>
@@ -68,10 +77,19 @@ function NextBusesList() {
             <p className="StopName">沼田料金所前</p>
             {numaData.map((element: BusService, index: number) => (
               <div key={index} className="NextBusesListCell">
-                <p className="BusName">{element.trip_short_id}<br />{element.trip_dest}</p>
-                <p className="StaticTime">{element.arrival_time}</p>
-                <p className="RemainingMinutes">{element.remaining_time}</p>
-                <p className="DelayMinutes">{element.delay}</p>
+                <div className={element.trip_short_id === "63" || element.trip_short_id === "65"  || element.trip_short_id === "61" ? "BusName ViaYokogawa" : "BusName ViaNakahiro"}>
+                  <p className="BusShortId">{element.trip_short_id}</p>
+                  <p className={element.trip_short_id === "63" || element.trip_short_id === "65"  || element.trip_short_id === "61" ? "BusDestination ViaYokogawa" : "BusDestination ViaNakahiro"}>{element.trip_dest}</p>
+                </div>
+                <div className='BusArrivalTime'>
+                  <p className="StaticTime">{element.arrival_time}</p>
+                  <p className="DelayMinutes">{element.delay}</p>
+                </div>
+                <div className='ViaStopAndRemainingMinutes'>
+                  <p className="ViaStop">{element.trip_short_id === "63" || element.trip_short_id === "65"  || element.trip_short_id === "61" ? "横川駅前経由" : "中広町経由"}</p>
+                  <p className="RemainingMinutes">{element.remaining_time}</p>
+                </div>
+                <p className='CurrentLocation'>{element.current_location != "" ? element.current_location +"を通過": "発車待ち"}</p>
               </div>
             ))}
           </div>
