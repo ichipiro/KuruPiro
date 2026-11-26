@@ -24,7 +24,7 @@ function createDynamicTime(staticTime: string, delays: string) {
   const delayMinutes = delays === "" ? 0: parseInt(delays);
 
   const [hour, minute] = timeArray;
-  return `${hour + Math.trunc((minute + delayMinutes) / 60)}:${(minute + delayMinutes) % 60}`
+  return `${(hour + Math.trunc((minute + delayMinutes) / 60)).toString().padStart(2, '0')}:${((minute + delayMinutes) % 60).toString().padStart(2, '0')}`
 }
 
 function NextBusesList() {
