@@ -19,6 +19,14 @@ async function fetchMultiBusData(url: string, retries = 5, intervalMs = 1000): P
   return {};
 }
 
+function createDynamicTime(staticTime: string, delays: string) {
+  const timeArray: number[] = staticTime.split(":").map((content:string) => parseInt(content));
+  const delayMinutes = delays === "" ? 0: parseInt(delays);
+
+  const [hour, minute] = timeArray;
+  return `${hour + Math.trunc((minute + delayMinutes) / 60)}:${(minute + delayMinutes) % 60}`
+}
+
 function NextBusesList() {
   const [piroData, setPiroData] = useState<BusService[]>([]);
   const [numaData, setNumaData] = useState<BusService[]>([]);
