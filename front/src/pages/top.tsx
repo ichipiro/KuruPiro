@@ -70,7 +70,14 @@ function NextBusesList() {
                   <p className={element.trip_short_id === "63" || element.trip_short_id === "65"  || element.trip_short_id === "61" ? "BusDestination ViaYokogawa" : "BusDestination ViaNakahiro"}>{element.trip_dest}</p>
                 </div>
                 <div className='BusArrivalTime'>
-                  <p className="StaticTime">{element.arrival_time}</p>
+                  <div className='CalculatedTime'>
+                  <p className={element.delay === "" ? "StaticTime": "StaticTime delayed"}>{element.arrival_time}</p>
+                  <p className='DynamicTime'>
+                    {
+                      element.delay === "" ? "": createDynamicTime(element.arrival_time, element.delay)
+                    }
+                  </p>
+                  </div>
                   <p className="DelayMinutes">{element.delay}</p>
                 </div>
                 <div className='ViaStopAndRemainingMinutes'>
@@ -90,7 +97,14 @@ function NextBusesList() {
                   <p className={element.trip_short_id === "63" || element.trip_short_id === "65"  || element.trip_short_id === "61" ? "BusDestination ViaYokogawa" : "BusDestination ViaNakahiro"}>{element.trip_dest}</p>
                 </div>
                 <div className='BusArrivalTime'>
-                  <p className="StaticTime">{element.arrival_time}</p>
+                  <div className='CalculatedTime'>
+                  <p className={element.delay === "" ? "StaticTime": "StaticTime delayed"}>{element.arrival_time}</p>
+                  <p className='DynamicTime'>
+                    {
+                      element.delay === "" ? "": createDynamicTime(element.arrival_time, element.delay)
+                    }
+                  </p>
+                  </div>
                   <p className="DelayMinutes">{element.delay}</p>
                 </div>
                 <div className='ViaStopAndRemainingMinutes'>

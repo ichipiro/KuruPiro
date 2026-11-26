@@ -125,6 +125,19 @@ p {
 	/* margin-top: 20px; */
 }
 
+.StaticTime.delayed {
+	font-size: 1.0em;
+	font-weight: bold;
+    text-decoration: line-through;
+	/* margin-top: 20px; */
+}
+
+.DynamicTime {
+	font-size: 1.5em;
+	font-weight: bold;
+    color: red;
+}
+
 .RemainingMinutes {
 	/* margin-top: 60px; */
 	font-size: 0.8em;
