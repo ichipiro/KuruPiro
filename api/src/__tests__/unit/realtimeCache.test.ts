@@ -113,23 +113,6 @@ describe('RealtimeCache', () => {
     expect(storage.setAlarm).toHaveBeenCalledWith(NOW + 60_000);
   });
 
-  it('初回更新時に旧キー realtimeData を掃除する（isolateにつき1回だけ）', async () => {
-    await cache.alarm();
-    await cache.alarm();
-
-    expect(storage.delete).toHaveBeenCalledTimes(1);
-    expect(storage.delete).toHaveBeenCalledWith('realtimeData');
-  });
-
-  it('旧キーの掃除に失敗しても更新は続行する', async () => {
-    storage.delete.mockRejectedValue(new Error('storage down'));
-
-    const response = await cache.fetch(new Request('https://fake-host/update'));
-
-    expect(await response.json()).toEqual({ status: 'updated' });
-    expect(r2Put).toHaveBeenCalledTimes(1);
-  });
-
   it('旧読み取りルート /data・/updates は存在しない（404）', async () => {
     const dataResponse = await cache.fetch(new Request('https://fake-host/data'));
     const updatesResponse = await cache.fetch(
@@ -172,6 +155,8 @@ describe('RealtimeCache', () => {
         monitorSlug: 'realtime-poller',
         status: 'ok',
       });
+      // 次回の間引き判定のためにstorageへ送信時刻を残す（DO退避対策）
+      expect(storage.put).toHaveBeenCalledWith('sentryHeartbeatAt', NOW);
 
       // 15秒後の次アラームでは送らない（1分間引き）
       vi.setSystemTime(NOW + 15_000);
@@ -182,6 +167,23 @@ describe('RealtimeCache', () => {
       vi.setSystemTime(NOW + 61_000);
       await cache.alarm();
       expect(captureCheckIn).toHaveBeenCalledTimes(2);
+    });
+
+    it('インスタンス再生成（DO退避）後もstorageの前回送信時刻で間引く', async () => {
+      // 本番ではアラーム間のidleで毎回インスタンスが作り直される。
+      // storageに残した前回送信時刻から間引きを引き継げることを確認する
+      cache = makeCache({ SENTRY_DSN: 'https://key@example.ingest.sentry.io/1' });
+      storage.get.mockResolvedValue(NOW - 15_000);
+
+      await cache.alarm();
+      expect(captureCheckIn).not.toHaveBeenCalled();
+
+      // 60秒超経過していれば新インスタンスでも送る
+      cache = makeCache({ SENTRY_DSN: 'https://key@example.ingest.sentry.io/1' });
+      storage.get.mockResolvedValue(NOW - 61_000);
+
+      await cache.alarm();
+      expect(captureCheckIn).toHaveBeenCalledTimes(1);
     });
 
     it('SENTRY_DSN未設定ならcheck-inを送らない', async () => {

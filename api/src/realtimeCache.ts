@@ -15,9 +15,7 @@ export class RealtimeCache implements DurableObject {
   private env: Env;
   /** 手動強制更新(/update)のデバウンス用。alarm(15秒間隔)より短い連打を吸収する */
   private lastManualUpdateAt = 0;
-  /** #59残骸(旧読み取り経路のstorageキー)の掃除を済ませたか（isolate起動ごとに1回で十分） */
-  private legacyStorageCleaned = false;
-  /** Sentry Cronsハートビートの送信間引き用（毎アラーム=15秒おきに送るとクォータを食うため） */
+  /** Sentry Cronsハートビートの送信間引き用（DO退避でインメモリは消えるためstorageと併用） */
   private lastHeartbeatAt = 0;
 
   constructor(state: DurableObjectState, env: Env) {
@@ -130,15 +128,6 @@ export class RealtimeCache implements DurableObject {
    * Fetch and update realtime data
    */
   private async updateRealtimeData(): Promise<boolean> {
-    // #59残骸の掃除: 二重書き込み時代の'realtimeData'キー(約513KB)を消す。
-    // 失敗してもポーラー本務(フィード取得→R2書き込み)は続行する
-    if (!this.legacyStorageCleaned) {
-      this.legacyStorageCleaned = true;
-      await this.state.storage.delete('realtimeData').catch((error) => {
-        console.warn('[RealtimeCache] legacy realtimeData cleanup failed:', error);
-      });
-    }
-
     // 「配信元への単一ポーラー」の約束を守る最後の砦。alarm以外にも
     // /updateから呼ばれるため、呼び出し元ではなくここで止める。
     // プレビューWorker等では配信元fetchも共有R2への書き込みも一切行わない
@@ -164,7 +153,7 @@ export class RealtimeCache implements DurableObject {
       console.log(
         `[RealtimeCache] Updated ${tripUpdates.length} trip updates (put: ${Date.now() - putStartedAt}ms)`
       );
-      this.sendHeartbeat();
+      await this.sendHeartbeat();
       return true;
     } catch (error) {
       console.error('[RealtimeCache] Failed to update realtime data:', error);
@@ -181,9 +170,16 @@ export class RealtimeCache implements DurableObject {
    * 15秒ごとのアラームから毎回は送らず1分に間引く（モニターは1分間隔で設定）。
    * 失敗してもポーラー本務には影響させない。
    */
-  private sendHeartbeat(): void {
+  private async sendHeartbeat(): Promise<void> {
     if (!this.env.SENTRY_DSN) return;
     const now = Date.now();
+    // DOインスタンスはアラーム間のわずかなidleでも退避され、インメモリの
+    // 前回送信時刻は毎回失われる（#70デプロイ直後、毎アラーム送信になっていた）。
+    // 初期値のときだけstorageから引き継ぐ。読めなければ「送る」側に倒す
+    if (this.lastHeartbeatAt === 0) {
+      this.lastHeartbeatAt =
+        (await this.state.storage.get<number>('sentryHeartbeatAt').catch(() => undefined)) ?? 0;
+    }
     if (now - this.lastHeartbeatAt < HEARTBEAT_INTERVAL_MS) return;
     this.lastHeartbeatAt = now;
     try {
@@ -196,6 +192,7 @@ export class RealtimeCache implements DurableObject {
           timezone: 'Asia/Tokyo',
         }
       );
+      await this.state.storage.put('sentryHeartbeatAt', now);
     } catch (error) {
       console.warn('[RealtimeCache] Sentry check-in failed:', error);
     }
