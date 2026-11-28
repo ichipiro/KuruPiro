@@ -4,7 +4,7 @@ import { ProtobufDecoder } from './infrastructure/external/gtfs/ProtobufDecoder'
 
 /**
  * Durable Object that periodically polls GTFS Realtime API
- * and caches the trip updates data
+ * and publishes the trip updates snapshot to R2
  */
 export class RealtimeCache implements DurableObject {
   private state: DurableObjectState;
@@ -46,43 +46,6 @@ export class RealtimeCache implements DurableObject {
 
   private async handleFetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-
-    // Get cached data
-    if (url.pathname === '/data') {
-      const data = await this.getCachedData();
-
-      // 呼び出し側が既に同じ版を持っていれば本文を送らない。
-      // 350KB超のJSONをWorker側でリクエスト毎にパースするとCPU制限(無料10ms)を
-      // 圧迫するため、フィードが変わったときだけ本文を返す
-      const fetchedAt = data ? String(data.fetchedAt) : '';
-      if (data && url.searchParams.get('since') === fetchedAt) {
-        return new Response(null, {
-          status: 304,
-          headers: { 'X-Fetched-At': fetchedAt },
-        });
-      }
-
-      return new Response(JSON.stringify(data), {
-        headers: { 'Content-Type': 'application/json', 'X-Fetched-At': fetchedAt },
-      });
-    }
-
-    // 指定トリップの更新情報だけを返す（ホットパス用）
-    // Workerがフィード全件(350KB超)をパースするとCPU制限を圧迫するため、
-    // 必要なトリップに絞った小さな応答を返す
-    if (url.pathname === '/updates' && request.method === 'POST') {
-      const body = await request.json<{ tripIds?: string[] }>();
-      const wanted = new Set(body?.tripIds ?? []);
-      const data = await this.getCachedData();
-
-      const tripUpdates = data
-        ? data.tripUpdates.filter((update) => wanted.has(update.tripId))
-        : [];
-      return new Response(
-        JSON.stringify({ fetchedAt: data?.fetchedAt ?? Date.now(), tripUpdates }),
-        { headers: { 'Content-Type': 'application/json' } }
-      );
-    }
 
     // Force update
     if (url.pathname === '/update') {
@@ -156,47 +119,12 @@ export class RealtimeCache implements DurableObject {
   }
 
   /**
-   * Get cached realtime data from storage
-   */
-  private async getCachedData(): Promise<CachedRealtimeData | null> {
-    // If no cached data exists, trigger initial update
-    console.log('[RealtimeCache] Getting cached data...');
-    const cachedData = await this.state.storage.get<CachedRealtimeData>('realtimeData');
-
-    if (!cachedData) {
-      console.log('[RealtimeCache] No cache found, updating...');
-      await this.updateRealtimeData();
-      // Schedule first alarm
-      const currentAlarm = await this.state.storage.getAlarm();
-      if (currentAlarm === null) {
-        await this.state.storage.setAlarm(Date.now() + this.getUpdateInterval());
-      }
-      return (await this.state.storage.get<CachedRealtimeData>('realtimeData')) ?? null;
-    }
-
-    // stale-while-revalidate: キャッシュが古い場合はアラームを即座に再スケジュール
-    // （/data・/updates どちらの経路でも効くようここで行う）
-    const ageSeconds = Math.floor((Date.now() - cachedData.fetchedAt) / 1000);
-    if (ageSeconds > this.getUpdateInterval() / 1000) {
-      const currentAlarm = await this.state.storage.getAlarm();
-      if (currentAlarm === null || currentAlarm > Date.now() + 5000) {
-        console.log(`[RealtimeCache] Cache is ${ageSeconds}s old, rescheduling alarm immediately`);
-        await this.state.storage.setAlarm(Date.now() + 1000);
-      }
-    }
-
-    console.log(`[RealtimeCache] Returning cached data with ${cachedData.tripUpdates.length} updates`);
-    return cachedData;
-  }
-
-  /**
    * Fetch and update realtime data
    */
   private async updateRealtimeData(): Promise<boolean> {
     // 「配信元への単一ポーラー」の約束を守る最後の砦。alarm以外にも
-    // /updateや初回読み取り(getCachedData)から呼ばれるため、呼び出し元
-    // ではなくここで止める。プレビューWorker等では配信元fetchも
-    // 共有R2への書き込みも一切行わない
+    // /updateから呼ばれるため、呼び出し元ではなくここで止める。
+    // プレビューWorker等では配信元fetchも共有R2への書き込みも一切行わない
     if (this.env.REALTIME_POLLER_ENABLED === 'false') {
       console.log('[RealtimeCache] poller disabled, skipping update');
       return false;
@@ -210,14 +138,12 @@ export class RealtimeCache implements DurableObject {
         tripUpdates,
       };
 
-      // 本命の置き場: R2スナップショット。Workerのリクエストはここから読む
+      // スナップショットの置き場はR2のみ。Workerのリクエストはここから読む
       const putStartedAt = Date.now();
       await this.env.REALTIME_BUCKET.put(
         'realtime/trip-updates.json',
         JSON.stringify(data)
       );
-      // 旧読み取り経路(ロールバック保険)のため、storageへの書き込みも1リリース残す
-      await this.state.storage.put('realtimeData', data);
       console.log(
         `[RealtimeCache] Updated ${tripUpdates.length} trip updates (put: ${Date.now() - putStartedAt}ms)`
       );

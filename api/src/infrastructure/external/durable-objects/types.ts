@@ -1,14 +1,14 @@
 /**
  * Durable Object（RealtimeCache）固有の型定義
  *
- * GTFS Realtimeデータのキャッシュ形式を定義します。
- * ドメインエンティティ（TripUpdate）への変換は DurableObjectRealtimeRepository が担います。
+ * GTFS Realtimeデータのスナップショット形式を定義します。
+ * ドメインエンティティ（TripUpdate）への変換は mapRawToTripUpdate が担います。
  */
 
 /**
  * GTFSリアルタイムのトリップ更新情報（生データ形式）
  *
- * DurableObjectのストレージに永続化される形式です。
+ * R2スナップショットに永続化される形式です。
  * ドメインエンティティ（TripUpdate）とは別物です。
  */
 export interface TripUpdateRaw {
@@ -24,9 +24,9 @@ export interface TripUpdateRaw {
 }
 
 /**
- * リアルタイムデータのキャッシュ形式
+ * リアルタイムデータのスナップショット形式
  *
- * DurableObjectのストレージに永続化されるデータ全体の構造です。
+ * R2スナップショットに永続化されるデータ全体の構造です。
  */
 export interface CachedRealtimeData {
   fetchedAt: number;
