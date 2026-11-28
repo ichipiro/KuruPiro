@@ -10,6 +10,7 @@ vi.mock('@/infrastructure/external/gtfs/ProtobufDecoder', () => ({
 }));
 
 describe('RealtimeCache', () => {
+  const NOW = Date.parse('2026-11-28T00:00:00Z');
   const tripUpdates = [
     {
       tripId: 'trip1',
@@ -20,6 +21,7 @@ describe('RealtimeCache', () => {
   let storage: {
     get: ReturnType<typeof vi.fn>;
     put: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
     setAlarm: ReturnType<typeof vi.fn>;
     getAlarm: ReturnType<typeof vi.fn>;
   };
@@ -31,6 +33,7 @@ describe('RealtimeCache', () => {
     storage = {
       get: vi.fn(async () => null),
       put: vi.fn(async () => undefined),
+      delete: vi.fn(async () => true),
       setAlarm: vi.fn(async () => undefined),
       getAlarm: vi.fn(async () => null),
     };
@@ -45,6 +48,8 @@ describe('RealtimeCache', () => {
   };
 
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
     vi.mocked(ProtobufDecoder.decodeTripUpdates).mockResolvedValue(tripUpdates);
     vi.stubGlobal(
       'fetch',
@@ -54,6 +59,7 @@ describe('RealtimeCache', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
@@ -78,11 +84,12 @@ describe('RealtimeCache', () => {
     expect(storage.setAlarm).toHaveBeenCalledTimes(1);
   });
 
-  it('alarm() は更新後に次のalarmを予約し、ストレージには書かない', async () => {
+  it('alarm() は更新後に次のalarmを更新間隔(15秒)後に予約し、ストレージには書かない', async () => {
     await cache.alarm();
 
     expect(r2Put).toHaveBeenCalledTimes(1);
     expect(storage.setAlarm).toHaveBeenCalledTimes(1);
+    expect(storage.setAlarm).toHaveBeenCalledWith(NOW + 15_000);
     expect(storage.put).not.toHaveBeenCalled();
   });
 
@@ -97,6 +104,24 @@ describe('RealtimeCache', () => {
     expect(r2Put).not.toHaveBeenCalled();
     expect(storage.put).not.toHaveBeenCalled();
     expect(storage.setAlarm).toHaveBeenCalledTimes(1);
+    expect(storage.setAlarm).toHaveBeenCalledWith(NOW + 60_000);
+  });
+
+  it('初回更新時に旧キー realtimeData を掃除する（isolateにつき1回だけ）', async () => {
+    await cache.alarm();
+    await cache.alarm();
+
+    expect(storage.delete).toHaveBeenCalledTimes(1);
+    expect(storage.delete).toHaveBeenCalledWith('realtimeData');
+  });
+
+  it('旧キーの掃除に失敗しても更新は続行する', async () => {
+    storage.delete.mockRejectedValue(new Error('storage down'));
+
+    const response = await cache.fetch(new Request('https://fake-host/update'));
+
+    expect(await response.json()).toEqual({ status: 'updated' });
+    expect(r2Put).toHaveBeenCalledTimes(1);
   });
 
   it('旧読み取りルート /data・/updates は存在しない（404）', async () => {
