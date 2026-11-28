@@ -1,8 +1,10 @@
 import type { IRealtimeRepository } from '@/domain/repositories';
 
 export interface CacheInfoDTO {
-  lastUpdatedAt: string;
-  ageSeconds: number;
+  /** 提供中リアルタイムデータの取得時刻。リアルタイムなし（stale落ち含む）の場合はnull */
+  lastUpdatedAt: string | null;
+  /** 取得からの経過秒数。リアルタイムなしの場合はnull */
+  ageSeconds: number | null;
   totalTrips: number;
   now: string;
   tripIds?: string[];
@@ -19,8 +21,8 @@ export class GetCacheInfoUseCase {
 
     const now = Date.now();
     const dto: CacheInfoDTO = {
-      lastUpdatedAt: new Date(lastUpdated).toISOString(),
-      ageSeconds: Math.floor((now - lastUpdated) / 1000),
+      lastUpdatedAt: lastUpdated !== null ? new Date(lastUpdated).toISOString() : null,
+      ageSeconds: lastUpdated !== null ? Math.floor((now - lastUpdated) / 1000) : null,
       totalTrips: allUpdates.length,
       now: new Date(now).toISOString(),
     };

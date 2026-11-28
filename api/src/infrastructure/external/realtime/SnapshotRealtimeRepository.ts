@@ -64,6 +64,8 @@ export function resetSnapshotCache(): void {
  * - 15秒以内に同期済み: R2にも触れず即応答
  * - それ以外: R2をETag条件付きで読む（変わっていなければ本文転送なし）
  * - R2が遅い/失敗: 手元のキャッシュ（5分まで）で応答し、鮮度より可用性を優先
+ * - スナップショットが5分超に古い: R2読み取りの成否によらずリアルタイムなし
+ *   として扱う（ポーラー無音死でR2に残った最終スナップショットを無期限提供しない）
  * - スナップショットが45秒超に古い: ポーラーのalarm復活を waitUntil で促す
  *   （読み取り経路がDOを呼ばなくなったことで生じる「alarm無音死」への保険）
  */
@@ -90,9 +92,9 @@ export class SnapshotRealtimeRepository implements IRealtimeRepository {
     return this.entityOf(cache, tripId.value);
   }
 
-  async getLastUpdatedAt(): Promise<number> {
+  async getLastUpdatedAt(): Promise<number | null> {
     const cache = await this.ensureData();
-    return cache?.fetchedAt ?? Date.now();
+    return cache?.fetchedAt ?? null;
   }
 
   async getTripUpdatesForTrips(tripIds: TripId[]): Promise<Map<string, TripUpdate>> {
@@ -136,7 +138,7 @@ export class SnapshotRealtimeRepository implements IRealtimeRepository {
     const cache = isolateCache;
     if (cache && Date.now() - cache.syncedAt < FRESH_MS) {
       this.scheduleWatchdog(cache);
-      return cache;
+      return this.unlessStale(cache);
     }
 
     try {
@@ -156,7 +158,19 @@ export class SnapshotRealtimeRepository implements IRealtimeRepository {
     if (synced) {
       this.scheduleWatchdog(synced);
     }
-    return synced;
+    return this.unlessStale(synced);
+  }
+
+  /**
+   * MAX_STALE_MSを超えたスナップショットはリアルタイムなし扱いにする
+   *
+   * ポーラーが無音死するとR2の最終スナップショットは同期自体には成功し続ける。
+   * 成功経路にも鮮度上限をかけ、呼び出し側を時刻表のみの表示へ自然に退化させる
+   * （キャッシュ自体は破棄せず、watchdogによる復活要求は呼び出し元が済ませている）。
+   */
+  private unlessStale(cache: SnapshotCacheState | null): SnapshotCacheState | null {
+    if (!cache) return null;
+    return Date.now() - cache.fetchedAt >= MAX_STALE_MS ? null : cache;
   }
 
   /** R2と同期する（単一飛行） */
