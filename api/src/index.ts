@@ -22,6 +22,10 @@ const app = new Hono<{
 // 含まない）をブラウザにキャッシュさせる秒数。未指定だと既定5秒のため、
 // サイネージの15秒ポーリングで毎回 OPTIONS+POST の2往復になっていた。
 // 7200秒はChromium系が受け付ける上限（超過分は切り詰められる）。
+// exposeHeaders(Access-Control-Expose-Headers)が無いと、クロスオリジンの
+// fetchからはリアルタイム鮮度ヘッダが読めない（サイネージが検知に使う）
+const REALTIME_FRESHNESS_HEADERS = ['X-Realtime-Updated-At', 'X-Realtime-Age-Seconds'];
+
 app.use('*', async (c, next) => {
   const isDebugMode = c.env.DEBUG_MODE === 'true';
   if (isDebugMode) {
@@ -29,10 +33,11 @@ app.use('*', async (c, next) => {
       origin: '*',
       allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization'],
+      exposeHeaders: REALTIME_FRESHNESS_HEADERS,
       maxAge: 7200,
     })(c, next);
   }
-  return cors({ origin: '*', maxAge: 7200 })(c, next);
+  return cors({ origin: '*', exposeHeaders: REALTIME_FRESHNESS_HEADERS, maxAge: 7200 })(c, next);
 });
 app.use('*', injectServiceFactory());
 

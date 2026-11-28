@@ -64,11 +64,25 @@ export function resetSnapshotCache(): void {
  * - 15秒以内に同期済み: R2にも触れず即応答
  * - それ以外: R2をETag条件付きで読む（変わっていなければ本文転送なし）
  * - R2が遅い/失敗: 手元のキャッシュ（5分まで）で応答し、鮮度より可用性を優先
+ * - スナップショットが5分超に古い: R2読み取りの成否によらずリアルタイムなし
+ *   として扱う（ポーラー無音死でR2に残った最終スナップショットを無期限提供しない）
  * - スナップショットが45秒超に古い: ポーラーのalarm復活を waitUntil で促す
  *   （読み取り経路がDOを呼ばなくなったことで生じる「alarm無音死」への保険）
  */
 export class SnapshotRealtimeRepository implements IRealtimeRepository {
   private doStub: DurableObjectStub;
+
+  /**
+   * このリクエストで最初に確定した提供判定のピン留め
+   *
+   * 本インスタンスはServiceFactory経由でリクエストごとに生成される。
+   * 応答ボディの組み立て後に鮮度ヘッダ用の getLastUpdatedAt() が走るため、
+   * その間にFRESH_MS/MAX_STALE_MS境界を跨いで再同期・再判定すると
+   * ヘッダとボディが乖離する。最初の判定を保持し、鮮度報告はこれを使う
+   * （データ提供の経路には影響しない）。
+   * undefined = 未判定 / null = リアルタイムなしで確定
+   */
+  private servedSnapshot: SnapshotCacheState | null | undefined;
 
   constructor(
     private readonly env: Env,
@@ -90,9 +104,14 @@ export class SnapshotRealtimeRepository implements IRealtimeRepository {
     return this.entityOf(cache, tripId.value);
   }
 
-  async getLastUpdatedAt(): Promise<number> {
-    const cache = await this.ensureData();
-    return cache?.fetchedAt ?? Date.now();
+  async getLastUpdatedAt(): Promise<number | null> {
+    // 応答の組み立てに使った提供判定をそのまま報告する（ヘッダとボディの整合）。
+    // 再同期・再判定をしないので、R2障害時に読み取りを上乗せすることもない。
+    // 未判定（このリクエストでまだ提供していない）場合のみ通常経路で確定させる
+    if (this.servedSnapshot === undefined) {
+      await this.ensureData();
+    }
+    return this.servedSnapshot?.fetchedAt ?? null;
   }
 
   async getTripUpdatesForTrips(tripIds: TripId[]): Promise<Map<string, TripUpdate>> {
@@ -114,6 +133,8 @@ export class SnapshotRealtimeRepository implements IRealtimeRepository {
   async forceUpdate(): Promise<void> {
     await this.doStub.fetch('https://fake-host/update');
     resetSnapshotCache();
+    // 明示的な無効化なので、提供判定のピン留めも取り直す
+    this.servedSnapshot = undefined;
   }
 
   /**
@@ -133,10 +154,29 @@ export class SnapshotRealtimeRepository implements IRealtimeRepository {
   }
 
   private async ensureData(): Promise<SnapshotCacheState | null> {
+    try {
+      const resolved = await this.resolveSnapshot();
+      // 最初の提供判定をリクエスト内でピン留めする
+      // （nullの「リアルタイムなし」判定も保持するため ??= は使えない）
+      if (this.servedSnapshot === undefined) {
+        this.servedSnapshot = resolved;
+      }
+      return resolved;
+    } catch (error) {
+      // 失敗＝このリクエストはリアルタイムなしで応答する、という判定として固定し、
+      // 同一リクエスト内の鮮度取得がR2読み取りを再試行しないようにする
+      if (this.servedSnapshot === undefined) {
+        this.servedSnapshot = null;
+      }
+      throw error;
+    }
+  }
+
+  private async resolveSnapshot(): Promise<SnapshotCacheState | null> {
     const cache = isolateCache;
     if (cache && Date.now() - cache.syncedAt < FRESH_MS) {
       this.scheduleWatchdog(cache);
-      return cache;
+      return this.unlessStale(cache);
     }
 
     try {
@@ -156,7 +196,19 @@ export class SnapshotRealtimeRepository implements IRealtimeRepository {
     if (synced) {
       this.scheduleWatchdog(synced);
     }
-    return synced;
+    return this.unlessStale(synced);
+  }
+
+  /**
+   * MAX_STALE_MSを超えたスナップショットはリアルタイムなし扱いにする
+   *
+   * ポーラーが無音死するとR2の最終スナップショットは同期自体には成功し続ける。
+   * 成功経路にも鮮度上限をかけ、呼び出し側を時刻表のみの表示へ自然に退化させる
+   * （キャッシュ自体は破棄せず、watchdogによる復活要求は呼び出し元が済ませている）。
+   */
+  private unlessStale(cache: SnapshotCacheState | null): SnapshotCacheState | null {
+    if (!cache) return null;
+    return Date.now() - cache.fetchedAt >= MAX_STALE_MS ? null : cache;
   }
 
   /** R2と同期する（単一飛行） */

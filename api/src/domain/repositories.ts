@@ -69,9 +69,12 @@ export interface IRealtimeRepository {
    */
   getTripUpdatesForTrips(tripIds: TripId[]): Promise<Map<string, TripUpdate>>;
   /**
-   * リアルタイムデータの最終更新時刻を取得（Unix timestamp）
+   * 提供中リアルタイムデータの取得時刻を取得（Unix timestamp、ミリ秒）
+   *
+   * リアルタイムなし（未取得、または鮮度上限超過で提供停止）の場合はnull。
+   * データが無いのに現在時刻を返して「新鮮」に見せることはしない。
    */
-  getLastUpdatedAt(): Promise<number>;
+  getLastUpdatedAt(): Promise<number | null>;
   /**
    * リアルタイムデータを強制更新
    */

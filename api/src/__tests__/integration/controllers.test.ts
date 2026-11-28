@@ -76,6 +76,9 @@ describe('Controllers Integration Tests', () => {
           stopName: '東京駅',
         }),
       }),
+      getGetRealtimeFreshnessUseCase: vi.fn().mockReturnValue({
+        execute: vi.fn().mockResolvedValue(null),
+      }),
     } as any;
   });
 
@@ -127,6 +130,9 @@ describe('Controllers Integration Tests', () => {
             execute: vi.fn().mockImplementation(async (query: { limit: number }) =>
               ({ type: 'single', buses: multipleBuses.slice(0, query.limit) })
             ),
+          }),
+          getGetRealtimeFreshnessUseCase: vi.fn().mockReturnValue({
+            execute: vi.fn().mockResolvedValue(null),
           }),
         } as any;
 
@@ -269,6 +275,9 @@ describe('Controllers Integration Tests', () => {
               queries.map((q) => multipleBuses.slice(0, q.limit))
           ),
         }),
+        getGetRealtimeFreshnessUseCase: vi.fn().mockReturnValue({
+          execute: vi.fn().mockResolvedValue(null),
+        }),
       } as any;
 
       app.post('/api/trips/batch', async (c) => {
@@ -289,6 +298,90 @@ describe('Controllers Integration Tests', () => {
       const data = (await response.json()) as any[][];
       expect(data[0]).toHaveLength(3);
       expect(data[1]).toHaveLength(2);
+    });
+  });
+
+  describe('realtime freshness headers', () => {
+    /** 鮮度ユースケースだけ差し替えたファクトリを作る */
+    const withFreshness = (updatedAt: number | null) => {
+      (mockFactory as any).getGetRealtimeFreshnessUseCase = vi.fn().mockReturnValue({
+        execute: vi.fn().mockResolvedValue(updatedAt),
+      });
+    };
+
+    it('should expose freshness headers on GET /api/trips when realtime is served', async () => {
+      const updatedAt = Date.now() - 30_000;
+      withFreshness(updatedAt);
+
+      app.get('/api/trips', async (c) => {
+        c.set('factory', mockFactory);
+        return await BusController.getTrips(c);
+      });
+
+      const response = await app.request('/api/trips?origin=origin&destination=dest');
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('X-Realtime-Updated-At')).toBe(String(updatedAt));
+      const age = Number(response.headers.get('X-Realtime-Age-Seconds'));
+      expect(age).toBeGreaterThanOrEqual(30);
+      expect(age).toBeLessThan(35);
+      // ボディ形状は従来通りの配列のまま（配信済み端末の互換性）
+      const data = (await response.json()) as any[];
+      expect(Array.isArray(data)).toBe(true);
+    });
+
+    it('should omit freshness headers on GET /api/trips when realtime is unavailable', async () => {
+      withFreshness(null);
+
+      app.get('/api/trips', async (c) => {
+        c.set('factory', mockFactory);
+        return await BusController.getTrips(c);
+      });
+
+      const response = await app.request('/api/trips?origin=origin&destination=dest');
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('X-Realtime-Updated-At')).toBeNull();
+      expect(response.headers.get('X-Realtime-Age-Seconds')).toBeNull();
+    });
+
+    it('should expose freshness headers on POST /api/trips/batch when realtime is served', async () => {
+      const updatedAt = Date.now() - 5_000;
+      withFreshness(updatedAt);
+
+      app.post('/api/trips/batch', async (c) => {
+        c.set('factory', mockFactory);
+        return await BusController.batchTrips(c);
+      });
+
+      const response = await app.request('/api/trips/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{ origin: '22030_2', destination: '51240_', limit: 5 }]),
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('X-Realtime-Updated-At')).toBe(String(updatedAt));
+      expect(Number(response.headers.get('X-Realtime-Age-Seconds'))).toBeGreaterThanOrEqual(5);
+    });
+
+    it('should omit freshness headers on POST /api/trips/batch when realtime is unavailable', async () => {
+      withFreshness(null);
+
+      app.post('/api/trips/batch', async (c) => {
+        c.set('factory', mockFactory);
+        return await BusController.batchTrips(c);
+      });
+
+      const response = await app.request('/api/trips/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{ origin: '22030_2', destination: '51240_', limit: 5 }]),
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('X-Realtime-Updated-At')).toBeNull();
+      expect(response.headers.get('X-Realtime-Age-Seconds')).toBeNull();
     });
   });
 

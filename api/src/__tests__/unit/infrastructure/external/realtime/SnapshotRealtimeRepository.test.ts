@@ -212,4 +212,142 @@ describe('SnapshotRealtimeRepository', () => {
     expect(doFetch).toHaveBeenCalledWith('https://fake-host/update');
     expect(r2Get).toHaveBeenCalledTimes(2);
   });
+
+  describe('staleness cap (MAX_STALE_MS)', () => {
+    const MAX_STALE_MS = 5 * 60_000;
+
+    it('should treat a snapshot at or beyond the cap as no realtime even when R2 read succeeds', async () => {
+      // ポーラー無音死の再現: R2読み取り自体は成功するがfetchedAtが5分前のまま
+      const deadFeed: CachedRealtimeData = { ...feed, fetchedAt: feed.fetchedAt - MAX_STALE_MS };
+      env = makeEnv(deadFeed);
+      const repo = new SnapshotRealtimeRepository(env, ctx);
+
+      expect(await repo.getAllTripUpdates()).toEqual([]);
+      expect(await repo.getTripUpdate(TripId.fromString('trip1'))).toBeUndefined();
+      expect((await repo.getTripUpdatesForTrips([TripId.fromString('trip1')])).size).toBe(0);
+      expect(await repo.getLastUpdatedAt()).toBeNull();
+      // 提供は止めても、ポーラー復活の試み（watchdog）は維持する
+      expect(doFetch).toHaveBeenCalledWith('https://fake-host/ensure-alarm');
+    });
+
+    it('should keep serving a snapshot that is just under the cap (4分59秒)', async () => {
+      const agingFeed: CachedRealtimeData = {
+        ...feed,
+        fetchedAt: feed.fetchedAt - (MAX_STALE_MS - 1_000),
+      };
+      env = makeEnv(agingFeed);
+      const repo = new SnapshotRealtimeRepository(env, ctx);
+
+      expect(await repo.getAllTripUpdates()).toHaveLength(2);
+      expect(await repo.getTripUpdate(TripId.fromString('trip1'))).toBeDefined();
+      expect(await repo.getLastUpdatedAt()).toBe(agingFeed.fetchedAt);
+    });
+
+    it('should stop serving when the R2 snapshot stops advancing, including the fresh fast path', async () => {
+      // t0: 正常に同期・提供
+      await new SnapshotRealtimeRepository(env, ctx).getAllTripUpdates();
+
+      // ポーラー無音死: R2オブジェクトは更新されない（ETag一致、fetchedAtは据え置き）
+      vi.setSystemTime(feed.fetchedAt + MAX_STALE_MS);
+      expect(await new SnapshotRealtimeRepository(env, ctx).getAllTripUpdates()).toEqual([]);
+      expect(r2Get).toHaveBeenCalledTimes(2);
+
+      // 直後（同期から15秒以内）のfresh早期return経路でも提供しない
+      vi.setSystemTime(feed.fetchedAt + MAX_STALE_MS + 1_000);
+      const repo = new SnapshotRealtimeRepository(env, ctx);
+      expect(await repo.getAllTripUpdates()).toEqual([]);
+      expect(await repo.getLastUpdatedAt()).toBeNull();
+      expect(r2Get).toHaveBeenCalledTimes(2); // R2には触れていない = fresh経路の確認
+      expect(doFetch).toHaveBeenCalledWith('https://fake-host/ensure-alarm');
+    });
+
+    it('should still throw when R2 fails and the cached snapshot is beyond the cap (fallback unchanged)', async () => {
+      await new SnapshotRealtimeRepository(env, ctx).getAllTripUpdates();
+
+      vi.setSystemTime(feed.fetchedAt + MAX_STALE_MS);
+      (env.REALTIME_BUCKET.get as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('R2 down')
+      );
+
+      await expect(new SnapshotRealtimeRepository(env, ctx).getAllTripUpdates()).rejects.toThrow();
+    });
+
+    it('should return the actual fetchedAt from getLastUpdatedAt while serving', async () => {
+      const repo = new SnapshotRealtimeRepository(env, ctx);
+      expect(await repo.getLastUpdatedAt()).toBe(feed.fetchedAt);
+    });
+  });
+
+  describe('request-scoped freshness pinning', () => {
+    const MAX_STALE_MS = 5 * 60_000;
+
+    it('should report the freshness of the snapshot used for the body even after crossing the cap', async () => {
+      const repo = new SnapshotRealtimeRepository(env, ctx);
+
+      // 4分59秒時点でボディを組み立て（提供あり）
+      vi.setSystemTime(feed.fetchedAt + MAX_STALE_MS - 1_000);
+      expect(await repo.getAllTripUpdates()).toHaveLength(2);
+
+      // ヘッダ付与時には5分を跨いでいても、提供したボディと同じ鮮度を報告する
+      vi.setSystemTime(feed.fetchedAt + MAX_STALE_MS + 1_000);
+      expect(await repo.getLastUpdatedAt()).toBe(feed.fetchedAt);
+    });
+
+    it('should keep reporting no realtime when the body was built without it, even if a fresh snapshot appears', async () => {
+      // stale判定でボディを組み立て（提供なし）
+      const deadFeed: CachedRealtimeData = { ...feed, fetchedAt: feed.fetchedAt - MAX_STALE_MS };
+      env = makeEnv(deadFeed);
+      const repo = new SnapshotRealtimeRepository(env, ctx);
+      expect(await repo.getAllTripUpdates()).toEqual([]);
+
+      // ポーラー復活: 新鮮なスナップショットがR2に現れる
+      const revivedFeed: CachedRealtimeData = { ...feed, fetchedAt: feed.fetchedAt + 16_000 };
+      (env.REALTIME_BUCKET.get as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+        etag: 'etag-2',
+        httpEtag: '"etag-2"',
+        body: {},
+        json: async () => revivedFeed,
+      });
+      vi.setSystemTime(feed.fetchedAt + 16_000);
+
+      // 同一リクエスト内の鮮度報告はボディの判定（提供なし）と一致させる
+      expect(await repo.getLastUpdatedAt()).toBeNull();
+      // 別リクエスト（新インスタンス）は新しい鮮度を報告する
+      expect(await new SnapshotRealtimeRepository(env, ctx).getLastUpdatedAt()).toBe(
+        revivedFeed.fetchedAt
+      );
+    });
+
+    it('should not report a newer snapshot picked up after the body was built (FRESH_MS boundary)', async () => {
+      const repo = new SnapshotRealtimeRepository(env, ctx);
+      expect(await repo.getAllTripUpdates()).toHaveLength(2);
+
+      // 15秒周期の次のスナップショットがR2に現れ、FRESH_MSも切れている
+      const newerFeed: CachedRealtimeData = { ...feed, fetchedAt: feed.fetchedAt + 15_000 };
+      (env.REALTIME_BUCKET.get as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+        etag: 'etag-2',
+        httpEtag: '"etag-2"',
+        body: {},
+        json: async () => newerFeed,
+      });
+      vi.setSystemTime(feed.fetchedAt + 16_000);
+
+      // ボディを組み立てたスナップショットの鮮度のまま（新しい方を先取りしない）
+      expect(await repo.getLastUpdatedAt()).toBe(feed.fetchedAt);
+    });
+
+    it('should not retry the R2 read for freshness after the sync already failed in this request', async () => {
+      (env.REALTIME_BUCKET.get as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('R2 down')
+      );
+      const repo = new SnapshotRealtimeRepository(env, ctx);
+
+      await expect(repo.getAllTripUpdates()).rejects.toThrow();
+      expect(r2Get).toHaveBeenCalledTimes(1);
+
+      // 鮮度取得はnullで即答し、R2読み取り（2.5秒タイムアウト）を上乗せしない
+      expect(await repo.getLastUpdatedAt()).toBeNull();
+      expect(r2Get).toHaveBeenCalledTimes(1);
+    });
+  });
 });

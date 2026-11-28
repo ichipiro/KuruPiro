@@ -5,11 +5,27 @@ import * as GetTripsQueryParser from '@/presentation/requests/GetTripsQueryParse
 import * as BatchTripsBodyParser from '@/presentation/requests/BatchTripsBodyParser';
 import * as BusResponseMapper from '@/presentation/responses/BusResponseMapper';
 
+/**
+ * リアルタイム鮮度をHTTPヘッダに載せる
+ *
+ * 配信済みサイネージ端末がボディの配列形状をパースしているため、
+ * ボディには手を入れずヘッダのみで鮮度を伝える。
+ * リアルタイムなし（未取得・鮮度上限超過での提供停止）のときは両ヘッダとも付けない。
+ */
+function setRealtimeFreshnessHeaders(c: Context, updatedAt: number | null): void {
+  if (updatedAt === null) return;
+  c.header('X-Realtime-Updated-At', String(updatedAt));
+  c.header('X-Realtime-Age-Seconds', String(Math.max(0, Math.floor((Date.now() - updatedAt) / 1000))));
+}
+
 export class BusController {
   static async getTrips(c: Context): Promise<Response> {
     const query = GetTripsQueryParser.parse(c);
     const factory = c.get('factory') as ServiceFactory;
     const result = await factory.getGetTripsUseCase().execute(query);
+    // リポジトリがリクエスト内で最初に確定した提供判定（= 応答ボディの検索に
+    // 使ったスナップショット）の鮮度が返る。検索後に境界を跨いでもズレない
+    setRealtimeFreshnessHeaders(c, await factory.getGetRealtimeFreshnessUseCase().execute());
     return c.json(BusResponseMapper.fromGetTripsResult(result));
   }
 
@@ -17,6 +33,7 @@ export class BusController {
     const queries = await BatchTripsBodyParser.parse(c);
     const factory = c.get('factory') as ServiceFactory;
     const results = await factory.getBatchTripsUseCase().execute(queries);
+    setRealtimeFreshnessHeaders(c, await factory.getGetRealtimeFreshnessUseCase().execute());
     return c.json(results.map((buses) => buses.map(BusResponseMapper.toNextBusResponse)));
   }
 }

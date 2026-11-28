@@ -16,6 +16,7 @@ import { GetTripsUseCase } from '@/application/use-cases/GetTripsUseCase';
 import { BatchTripsUseCase } from '@/application/use-cases/BatchTripsUseCase';
 import { ForceUpdateRealtimeUseCase } from '@/application/use-cases/ForceUpdateRealtimeUseCase';
 import { GetCacheInfoUseCase } from '@/application/use-cases/GetCacheInfoUseCase';
+import { GetRealtimeFreshnessUseCase } from '@/application/use-cases/GetRealtimeFreshnessUseCase';
 import { GetRealtimeTripDetailUseCase } from '@/application/use-cases/GetRealtimeTripDetailUseCase';
 import type { IStopRepository } from '@/domain/repositories';
 import type { IRouteRepository } from '@/domain/repositories';
@@ -186,6 +187,10 @@ export class ServiceFactory {
 
   getGetCacheInfoUseCase(): GetCacheInfoUseCase {
     return new GetCacheInfoUseCase(this.getRealtimeRepository());
+  }
+
+  getGetRealtimeFreshnessUseCase(): GetRealtimeFreshnessUseCase {
+    return new GetRealtimeFreshnessUseCase(this.getRealtimeRepository());
   }
 
   getGetRealtimeTripDetailUseCase(): GetRealtimeTripDetailUseCase {
