@@ -6,7 +6,6 @@ import { DrizzleRouteRepository } from '@/infrastructure/persistence/repositorie
 import { DrizzleTripRepository } from '@/infrastructure/persistence/repositories/DrizzleTripRepository';
 import { DrizzleStopTimeRepository } from '@/infrastructure/persistence/repositories/DrizzleStopTimeRepository';
 import { DrizzleCalendarRepository } from '@/infrastructure/persistence/repositories/DrizzleCalendarRepository';
-import { DurableObjectRealtimeRepository } from '@/infrastructure/external/durable-objects/DurableObjectRealtimeRepository';
 import { SnapshotRealtimeRepository } from '@/infrastructure/external/realtime/SnapshotRealtimeRepository';
 import { TripFinderService } from '@/domain/services/TripFinderService';
 import { TimeCalculationService } from '@/domain/services/TimeCalculationService';
@@ -103,11 +102,8 @@ export class ServiceFactory {
 
   getRealtimeRepository(): IRealtimeRepository {
     if (!this.realtimeRepo) {
-      // R2スナップショット読み取りが本命。バインディング未設定の環境
-      // （ロールバック時など）では旧DO直読みにフォールバックする
-      this.realtimeRepo = this.env.REALTIME_BUCKET
-        ? new SnapshotRealtimeRepository(this.env, this.ctx)
-        : new DurableObjectRealtimeRepository(this.env);
+      // 読み取りはR2スナップショット経由（DOはポーラー専用で、読み取り経路からは外す）
+      this.realtimeRepo = new SnapshotRealtimeRepository(this.env, this.ctx);
     }
     return this.realtimeRepo;
   }
