@@ -74,6 +74,30 @@ p {
 	width: fit-content;
 }
 
+.BusName.ViaAlpark{
+	/* color: whitesmoke; */
+	display: flex;
+	flex-direction: row;
+	/* align-items: left; */
+	/* width: 50%; */
+	font-size: 0.9em;
+	background-color: royalblue;
+	border: 3px solid royalblue;
+	width: fit-content;
+}
+
+.BusName.ViaIshiuchi{
+	/* color: whitesmoke; */
+	display: flex;
+	flex-direction: row;
+	/* align-items: left; */
+	/* width: 50%; */
+	font-size: 0.9em;
+	background-color: darkorange;
+	border: 3px solid darkorange;
+	width: fit-content;
+}
+
 .BusShortId {
 	text-align: left;
 	font-weight: bold;
@@ -99,6 +123,24 @@ p {
 	padding: 1px;
 	background-color: white;
 	color: blueviolet;
+}
+
+.BusDestination.ViaAlpark {
+	text-align: left;
+	font-weight: bold;
+	margin: 0;
+	padding: 1px;
+	background-color: white;
+	color: royalblue;
+}
+
+.BusDestination.ViaIshiuchi {
+	text-align: left;
+	font-weight: bold;
+	margin: 0;
+	padding: 1px;
+	background-color: white;
+	color: darkorange;
 }
 
 .BusArrivalTime {

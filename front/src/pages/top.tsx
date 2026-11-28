@@ -72,7 +72,7 @@ function NextBusesList() {
       try {
         const baseUrl = import.meta.env.VITE_BACKEND_URL || '';
         const result = await fetchMultiBusData(
-          baseUrl + '/api/trips?origin=22030_2,24140_1&destination=10_'
+          baseUrl + '/api/trips?origin=22030_2,24140_1&destination=10_,50020_,3220_,105_'
         );
         console.log(result);
         setPiroData(result['22030_2'] ?? []);
