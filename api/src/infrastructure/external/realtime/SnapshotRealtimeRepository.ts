@@ -72,6 +72,18 @@ export function resetSnapshotCache(): void {
 export class SnapshotRealtimeRepository implements IRealtimeRepository {
   private doStub: DurableObjectStub;
 
+  /**
+   * このリクエストで最初に確定した提供判定のピン留め
+   *
+   * 本インスタンスはServiceFactory経由でリクエストごとに生成される。
+   * 応答ボディの組み立て後に鮮度ヘッダ用の getLastUpdatedAt() が走るため、
+   * その間にFRESH_MS/MAX_STALE_MS境界を跨いで再同期・再判定すると
+   * ヘッダとボディが乖離する。最初の判定を保持し、鮮度報告はこれを使う
+   * （データ提供の経路には影響しない）。
+   * undefined = 未判定 / null = リアルタイムなしで確定
+   */
+  private servedSnapshot: SnapshotCacheState | null | undefined;
+
   constructor(
     private readonly env: Env,
     private readonly executionCtx?: ExecutionContext
@@ -93,8 +105,13 @@ export class SnapshotRealtimeRepository implements IRealtimeRepository {
   }
 
   async getLastUpdatedAt(): Promise<number | null> {
-    const cache = await this.ensureData();
-    return cache?.fetchedAt ?? null;
+    // 応答の組み立てに使った提供判定をそのまま報告する（ヘッダとボディの整合）。
+    // 再同期・再判定をしないので、R2障害時に読み取りを上乗せすることもない。
+    // 未判定（このリクエストでまだ提供していない）場合のみ通常経路で確定させる
+    if (this.servedSnapshot === undefined) {
+      await this.ensureData();
+    }
+    return this.servedSnapshot?.fetchedAt ?? null;
   }
 
   async getTripUpdatesForTrips(tripIds: TripId[]): Promise<Map<string, TripUpdate>> {
@@ -116,6 +133,8 @@ export class SnapshotRealtimeRepository implements IRealtimeRepository {
   async forceUpdate(): Promise<void> {
     await this.doStub.fetch('https://fake-host/update');
     resetSnapshotCache();
+    // 明示的な無効化なので、提供判定のピン留めも取り直す
+    this.servedSnapshot = undefined;
   }
 
   /**
@@ -135,6 +154,25 @@ export class SnapshotRealtimeRepository implements IRealtimeRepository {
   }
 
   private async ensureData(): Promise<SnapshotCacheState | null> {
+    try {
+      const resolved = await this.resolveSnapshot();
+      // 最初の提供判定をリクエスト内でピン留めする
+      // （nullの「リアルタイムなし」判定も保持するため ??= は使えない）
+      if (this.servedSnapshot === undefined) {
+        this.servedSnapshot = resolved;
+      }
+      return resolved;
+    } catch (error) {
+      // 失敗＝このリクエストはリアルタイムなしで応答する、という判定として固定し、
+      // 同一リクエスト内の鮮度取得がR2読み取りを再試行しないようにする
+      if (this.servedSnapshot === undefined) {
+        this.servedSnapshot = null;
+      }
+      throw error;
+    }
+  }
+
+  private async resolveSnapshot(): Promise<SnapshotCacheState | null> {
     const cache = isolateCache;
     if (cache && Date.now() - cache.syncedAt < FRESH_MS) {
       this.scheduleWatchdog(cache);

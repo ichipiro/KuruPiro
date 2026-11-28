@@ -23,7 +23,8 @@ export class BusController {
     const query = GetTripsQueryParser.parse(c);
     const factory = c.get('factory') as ServiceFactory;
     const result = await factory.getGetTripsUseCase().execute(query);
-    // 本検索後に取るので、isolateキャッシュ上の「応答に使われたスナップショット」の鮮度になる
+    // リポジトリがリクエスト内で最初に確定した提供判定（= 応答ボディの検索に
+    // 使ったスナップショット）の鮮度が返る。検索後に境界を跨いでもズレない
     setRealtimeFreshnessHeaders(c, await factory.getGetRealtimeFreshnessUseCase().execute());
     return c.json(BusResponseMapper.fromGetTripsResult(result));
   }
