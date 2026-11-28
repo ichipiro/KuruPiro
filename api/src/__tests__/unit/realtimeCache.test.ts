@@ -9,6 +9,12 @@ vi.mock('@/infrastructure/external/gtfs/ProtobufDecoder', () => ({
   },
 }));
 
+vi.mock('@sentry/cloudflare', () => ({
+  captureCheckIn: vi.fn(),
+}));
+
+import { captureCheckIn } from '@sentry/cloudflare';
+
 describe('RealtimeCache', () => {
   const NOW = Date.parse('2026-11-28T00:00:00Z');
   const tripUpdates = [
@@ -155,5 +161,59 @@ describe('RealtimeCache', () => {
     expect(response.status).toBe(403);
     expect(r2Put).not.toHaveBeenCalled();
     expect(storage.put).not.toHaveBeenCalled();
+  });
+  describe('Sentry Cronsハートビート', () => {
+    it('SENTRY_DSN設定時、更新成功でcheck-inを送り、1分以内は間引く', async () => {
+      cache = makeCache({ SENTRY_DSN: 'https://key@example.ingest.sentry.io/1' });
+
+      await cache.alarm();
+      expect(captureCheckIn).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(captureCheckIn).mock.calls[0][0]).toEqual({
+        monitorSlug: 'realtime-poller',
+        status: 'ok',
+      });
+
+      // 15秒後の次アラームでは送らない（1分間引き）
+      vi.setSystemTime(NOW + 15_000);
+      await cache.alarm();
+      expect(captureCheckIn).toHaveBeenCalledTimes(1);
+
+      // 60秒経過後は再送する
+      vi.setSystemTime(NOW + 61_000);
+      await cache.alarm();
+      expect(captureCheckIn).toHaveBeenCalledTimes(2);
+    });
+
+    it('SENTRY_DSN未設定ならcheck-inを送らない', async () => {
+      await cache.alarm();
+      expect(captureCheckIn).not.toHaveBeenCalled();
+    });
+
+    it('更新失敗時はcheck-inを送らない（missed check-inとして検知させる）', async () => {
+      cache = makeCache({ SENTRY_DSN: 'https://key@example.ingest.sentry.io/1' });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(null, { status: 500 }))
+      );
+
+      await cache.alarm();
+
+      expect(captureCheckIn).not.toHaveBeenCalled();
+      // 失敗退避(60秒)は通常通り
+      expect(storage.setAlarm).toHaveBeenCalledWith(NOW + 60_000);
+    });
+
+    it('check-in送信の失敗はポーラー本務に影響しない', async () => {
+      cache = makeCache({ SENTRY_DSN: 'https://key@example.ingest.sentry.io/1' });
+      vi.mocked(captureCheckIn).mockImplementation(() => {
+        throw new Error('sentry down');
+      });
+
+      await cache.alarm();
+
+      expect(r2Put).toHaveBeenCalledTimes(1);
+      // 成功扱いのまま15秒間隔で次を予約する
+      expect(storage.setAlarm).toHaveBeenCalledWith(NOW + 15_000);
+    });
   });
 });

@@ -1,6 +1,10 @@
+import * as Sentry from '@sentry/cloudflare';
 import type { Env } from './types';
 import type { TripUpdateRaw, CachedRealtimeData } from './infrastructure/external/durable-objects/types';
 import { ProtobufDecoder } from './infrastructure/external/gtfs/ProtobufDecoder';
+
+/** Sentry Cronsへのハートビート間隔。モニター設定(1分間隔)と対で変える */
+const HEARTBEAT_INTERVAL_MS = 60_000;
 
 /**
  * Durable Object that periodically polls GTFS Realtime API
@@ -13,6 +17,8 @@ export class RealtimeCache implements DurableObject {
   private lastManualUpdateAt = 0;
   /** #59残骸(旧読み取り経路のstorageキー)の掃除を済ませたか（isolate起動ごとに1回で十分） */
   private legacyStorageCleaned = false;
+  /** Sentry Cronsハートビートの送信間引き用（毎アラーム=15秒おきに送るとクォータを食うため） */
+  private lastHeartbeatAt = 0;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -158,11 +164,40 @@ export class RealtimeCache implements DurableObject {
       console.log(
         `[RealtimeCache] Updated ${tripUpdates.length} trip updates (put: ${Date.now() - putStartedAt}ms)`
       );
+      this.sendHeartbeat();
       return true;
     } catch (error) {
       console.error('[RealtimeCache] Failed to update realtime data:', error);
       // Don't throw - keep existing cached data if update fails
       return false;
+    }
+  }
+
+  /**
+   * ポーラー死活のハートビートをSentry Cronsへ送る（スナップショット更新成功時のみ）
+   *
+   * アラームが無音死した場合も、配信元やR2の障害で更新が失敗し続ける場合も、
+   * チェックインの途絶(missed check-in)としてアラートされる。
+   * 15秒ごとのアラームから毎回は送らず1分に間引く（モニターは1分間隔で設定）。
+   * 失敗してもポーラー本務には影響させない。
+   */
+  private sendHeartbeat(): void {
+    if (!this.env.SENTRY_DSN) return;
+    const now = Date.now();
+    if (now - this.lastHeartbeatAt < HEARTBEAT_INTERVAL_MS) return;
+    this.lastHeartbeatAt = now;
+    try {
+      Sentry.captureCheckIn(
+        { monitorSlug: 'realtime-poller', status: 'ok' },
+        {
+          schedule: { type: 'interval', value: 1, unit: 'minute' },
+          checkinMargin: 3,
+          maxRuntime: 2,
+          timezone: 'Asia/Tokyo',
+        }
+      );
+    } catch (error) {
+      console.warn('[RealtimeCache] Sentry check-in failed:', error);
     }
   }
 

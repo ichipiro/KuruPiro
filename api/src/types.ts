@@ -15,4 +15,10 @@ export interface Env {
   CACHE_WRITE_DISABLED?: string;
   ANALYTICS: AnalyticsEngineDataset;
   DEBUG_MODE?: string;
+  /** Sentryの送信先DSN（公開書き込み専用キー）。未設定ならSDKは無効のまま */
+  SENTRY_DSN?: string;
+  /** Sentry上で環境を区別するラベル（production / preview） */
+  SENTRY_ENVIRONMENT?: string;
+  /** トレースのサンプルレート（0〜1の数値文字列）。不正値・未設定時はコード側の既定値 */
+  SENTRY_TRACES_SAMPLE_RATE?: string;
 }
