@@ -1,12 +1,20 @@
 name = "kuru-piro-worker"
 main = "src/index.ts"
 compatibility_date = "2024-04-15"
+# Sentry SDKが使うAsyncLocalStorageのみ有効化する。
+# nodejs_compat + compatibility_date更新はランタイム挙動の変更範囲が広いため採らない
+compatibility_flags = ["nodejs_als"]
 account_id = "19fc1347cce15e26c18cd792616f737c"
 
 [vars]
 GTFS_STATIC_URL = "https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip"
 GTFS_REALTIME_URL = "https://ajt-mobusta-gtfs.mcapps.jp/realtime/8/trip_updates.bin"
 REALTIME_UPDATE_INTERVAL = "15"
+# DSNは公開書き込み専用キー（秘密情報ではない）。プレビューWorkerは
+# deploy-preview-worker.ymlの--varでSENTRY_ENVIRONMENT等を上書きする
+SENTRY_DSN = "https://9089b763a7f9065a8e7e80934a64556b@o4512510362320896.ingest.us.sentry.io/4512510379163648"
+SENTRY_ENVIRONMENT = "production"
+SENTRY_TRACES_SAMPLE_RATE = "0.05"
 
 [[kv_namespaces]]
 binding = "GTFS_CACHE"
@@ -64,6 +72,9 @@ GTFS_STATIC_URL = "https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip"
 GTFS_REALTIME_URL = "https://ajt-mobusta-gtfs.mcapps.jp/realtime/8/trip_updates.bin"
 REALTIME_UPDATE_INTERVAL = "15"
 DEBUG_MODE = "true"
+SENTRY_DSN = "https://9089b763a7f9065a8e7e80934a64556b@o4512510362320896.ingest.us.sentry.io/4512510379163648"
+SENTRY_ENVIRONMENT = "preview"
+SENTRY_TRACES_SAMPLE_RATE = "1.0"
 
 [[env.preview.kv_namespaces]]
 binding = "GTFS_CACHE"

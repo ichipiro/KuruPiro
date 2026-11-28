@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { BusController } from '@/presentation/controllers';
 import { StopController } from '@/presentation/controllers';
+import { HealthController } from '@/presentation/controllers';
 import { ServiceFactory } from '@/infrastructure/di/ServiceFactory';
 import { BadRequestError } from '@/presentation/errors';
 import type { Env } from '@/types';
@@ -443,6 +444,47 @@ describe('Controllers Integration Tests', () => {
         const data = (await response.json()) as any;
         expect(data).toHaveProperty('error');
       });
+    });
+  });
+  describe('HealthController', () => {
+    /** 鮮度ユースケースだけ差し替えたファクトリを作る */
+    const withFreshness = (updatedAt: number | null) => {
+      (mockFactory as any).getGetRealtimeFreshnessUseCase = vi.fn().mockReturnValue({
+        execute: vi.fn().mockResolvedValue(updatedAt),
+      });
+    };
+
+    const registerRoute = () => {
+      app.get('/api/health', async (c) => {
+        c.set('factory', mockFactory);
+        return await HealthController.getHealth(c);
+      });
+    };
+
+    it('リアルタイム提供中は200とageSecondsを返す', async () => {
+      withFreshness(Date.now() - 30_000);
+      registerRoute();
+
+      const response = await app.request('/api/health');
+
+      expect(response.status).toBe(200);
+      const data = (await response.json()) as any;
+      expect(data.status).toBe('ok');
+      expect(data.realtime).toBe(true);
+      expect(data.ageSeconds).toBeGreaterThanOrEqual(30);
+      expect(data.ageSeconds).toBeLessThan(35);
+    });
+
+    it('リアルタイムなし（未取得・鮮度上限超過）は503を返す', async () => {
+      withFreshness(null);
+      registerRoute();
+
+      const response = await app.request('/api/health');
+
+      expect(response.status).toBe(503);
+      const data = (await response.json()) as any;
+      expect(data.status).toBe('degraded');
+      expect(data.realtime).toBe(false);
     });
   });
 });

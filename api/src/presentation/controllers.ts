@@ -60,6 +60,28 @@ export class DebugController {
   }
 }
 
+export class HealthController {
+  /**
+   * 外形監視(Uptimeモニター)用のヘルスチェック
+   *
+   * リアルタイム提供中は200、提供なし（未取得・鮮度上限超過・R2障害）は503。
+   * 時刻表のみの提供は生きている状態なので、完全な障害とはbodyで区別できる。
+   * 503はHTTPステータスだけで判定する外形監視にそのまま乗る。
+   */
+  static async getHealth(c: Context): Promise<Response> {
+    const factory = c.get('factory') as ServiceFactory;
+    const updatedAt = await factory.getGetRealtimeFreshnessUseCase().execute();
+    if (updatedAt === null) {
+      return c.json({ status: 'degraded', realtime: false }, 503);
+    }
+    return c.json({
+      status: 'ok',
+      realtime: true,
+      ageSeconds: Math.max(0, Math.floor((Date.now() - updatedAt) / 1000)),
+    });
+  }
+}
+
 export class StopController {
   static async getStopInfo(c: Context): Promise<Response> {
     const stopId = StopId.fromString(c.req.param('stop_id'));
